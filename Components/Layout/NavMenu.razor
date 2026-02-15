@@ -1,0 +1,118 @@
+﻿@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">JobApplicator2</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="profil">
+                <span class="bi bi-person-badge-fill" aria-hidden="true"></span> Profil
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="generator">
+                <span class="bi bi-magic" aria-hidden="true"></span> Generator
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="settingsai">
+                <span class="bi bi-cpu-fill" aria-hidden="true"></span> KI Settings
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="template-editor">
+                <span class="bi bi-layout-text-window-reverse" aria-hidden="true"></span> Template Editor
+            </NavLink>
+        </div>
+
+        @* Dynamischer Link zum Content Editor - erscheint nur, wenn IDs vorhanden sind *@
+        @if (currentAppId > 0 && currentTemplateId > 0)
+        {
+            <div class="nav-item px-3 mt-2">
+                <NavLink class="nav-link special-editor-link"
+                         href="@($"content-editor/{currentAppId}/{currentTemplateId}")">
+                    <span class="nav-icon">✨</span>
+                    <span class="text-truncate">Editor: Weiterbearbeiten</span>
+                </NavLink>
+            </div>
+        }
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="expert-editor">
+                <span class="bi bi-cpu-fill" aria-hidden="true"></span> Database Edit
+            </NavLink>
+        </div>
+
+
+    </nav>
+</div>
+
+@code {
+    private int currentAppId = 0;
+    private int currentTemplateId = 0;
+
+    protected override void OnInitialized()
+    {
+        // Überwacht URL Änderungen
+        Nav.LocationChanged += HandleLocationChanged;
+        ExtractParameters(Nav.Uri);
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        ExtractParameters(e.Location);
+    }
+
+    private void ExtractParameters(string uri)
+    {
+        try
+        {
+            var segments = new Uri(uri).Segments;
+
+            // Logik für: /template-editor/{TemplateId}/{AppId}
+            // Segments: [0]="/", [1]="template-editor/", [2]="{TemplateId}/", [3]="{AppId}"
+            if (uri.Contains("template-editor") && segments.Length >= 4)
+            {
+                if (int.TryParse(segments[2].Trim('/'), out int tId)) currentTemplateId = tId;
+                if (int.TryParse(segments[3].Trim('/'), out int aId)) currentAppId = aId;
+            }
+            // Logik für: /content-editor/{AppId}/{TemplateId}
+            else if (uri.Contains("content-editor") && segments.Length >= 4)
+            {
+                if (int.TryParse(segments[2].Trim('/'), out int aId)) currentAppId = aId;
+                if (int.TryParse(segments[3].Trim('/'), out int tId)) currentTemplateId = tId;
+            }
+            // Wenn wir auf Home, Profil etc. sind, halten wir die IDs optional fest
+            // oder resetten sie, falls man den Editor-Link ausblenden will:
+            else if (!uri.Contains("editor"))
+            {
+                // currentAppId = 0;
+                // currentTemplateId = 0;
+            }
+        }
+        catch
+        {
+            // Fallback bei ungültigen URLs
+        }
+
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= HandleLocationChanged;
+    }
+}

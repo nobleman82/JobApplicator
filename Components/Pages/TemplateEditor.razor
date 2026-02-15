@@ -1,0 +1,345 @@
+@page "/template-editor"
+@page "/template-editor/{Id:int}"
+@page "/template-editor/{Id:int}/{AppId:int}"
+@using JobApplicator2.Services
+@using System.Text.Json
+@using System.Text
+@using AngleSharp.Html
+@using AngleSharp.Html.Parser
+@implements IDisposable
+@inject DatabaseService DbService
+@inject ProfileService ProfService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="main-layout">
+    @* LINKER BEREICH: EDITOR *@
+    <div class="editor-section p-3 border-end d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="m-0">Design-Editor</h4>
+            <div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="NewTemplate">Neu</button>
+                <button class="btn btn-sm btn-success ms-2" @onclick="SaveTemplate">💾 Speichern</button>
+            </div>
+        </div>
+
+        @* Meta & Auswahl *@
+        <div class="row g-2 mb-3">
+            <div class="col-md-6">
+                <label class="small fw-bold">Design Name</label>
+                <input type="text" class="form-control form-control-sm" @bind="template.Name" />
+            </div>
+            <div class="col-md-6">
+                <label class="small fw-bold">Vorlage öffnen</label>
+                <select class="form-select form-select-sm" @onchange="LoadSelectedTemplate">
+                    <option value="0">-- wählen --</option>
+                    @foreach (var t in savedTemplates)
+                    {
+                        <option value="@t.Id" selected="@(t.Id == template.Id)">@t.Name</option>
+                    }
+                </select>
+            </div>
+
+            @* Auswahl der Bewerbung für die Live-Vorschau *@
+            <div class="col-md-12 mt-2">
+                <div class="p-2 border rounded bg-light">
+                    <label class="small fw-bold text-primary">Vorschau-Inhalt (Bewerbung wählen)</label>
+                    <select class="form-select form-select-sm" @onchange="OnAppChanged">
+                        <option value="0">-- Standard Platzhalter --</option>
+                        @foreach (var app in allApplications)
+                        {
+                            <option value="@app.Id" selected="@(app.Id == AppId)">
+                                @app.Company - @app.JobTitle (@app.CreatedAt.ToShortDateString())
+                            </option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        @* Tab-Navigation *@
+        <ul class="nav nav-tabs mb-2">
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "cover" ? "active" : "")" @onclick='() => SetTab("cover")'>Deckblatt</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "letter" ? "active" : "")" @onclick='() => SetTab("letter")'>Anschreiben</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "cv" ? "active" : "")" @onclick='() => SetTab("cv")'>Lebenslauf</button>
+            </li>
+        </ul>
+
+        @* HTML CODE EDITOR (Pure Textarea) *@
+        <div class="editor-box mb-3 d-flex flex-column flex-grow-1">
+            <div class="d-flex justify-content-between bg-dark text-orange px-2 py-1 small rounded-top">
+                <span>HTML MarkUp (@activeTab)</span>
+                <select class="insert-dropdown" @onchange="InsertField" style="background: #333; color: white; border: none; font-size: 0.75rem;">
+                    <option value="">+ Feld einfügen</option>
+                    <option value="{{Name}}">Name</option>
+                    <option value="{{Photo}}">Foto</option>
+                    <option value="{{JobTitle}}">Job</option>
+                    <option value="{{Company}}">Firma</option>
+                    <option value="{{LetterText}}">Anschreiben-Text</option>
+                </select>
+            </div>
+            <div class="code-editor-container flex-grow-1">
+                @* KEIN PRE/CODE MEHR: Nur noch die Textarea mit der modern-code-editor Klasse *@
+                <textarea class="modern-code-editor"
+                          @bind="CurrentHtml"
+                          @bind:event="oninput"
+                          spellcheck="false"
+                          id="html-editor-textarea"></textarea>
+            </div>
+        </div>
+
+        @* CSS EDITOR (Pure Textarea) *@
+        <div class="editor-box mb-3">
+            <div class="bg-dark text-blue px-2 py-1 small rounded-top">CSS Styles (Global)</div>
+            <div class="code-editor-container" style="height: 300px;">
+                <textarea class="modern-code-editor"
+                          @bind="template.CustomCss"
+                          @bind:event="oninput"
+                          spellcheck="false"
+                          id="css-editor-textarea"></textarea>
+            </div>
+        </div>
+
+        @* KI BEREICH *@
+        <div class="mt-auto pt-2 border-top">
+            <div class="card border-info bg-light p-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="small fw-bold text-info m-0">KI Import</label>
+                    <button class="btn btn-xs btn-primary py-0" @onclick="CopyPromptToClipboard">📋 Prompt</button>
+                </div>
+                <textarea class="form-control form-control-sm" style="height: 40px; font-size: 0.7rem;"
+                          placeholder="JSON hier einfügen..." @oninput="OnImportJsonInput"></textarea>
+            </div>
+        </div>
+    </div>
+
+    @* RECHTER BEREICH: VORSCHAU *@
+    <div class="preview-section bg-secondary">
+        <div class="preview-toolbar d-flex justify-content-between align-items-center px-3">
+            <div>
+                <span class="badge bg-dark">A4 Live-Preview</span>
+                <small class="text-light ms-3">Layout: @template.Name | Inhalt: @(selectedApp?.Company ?? "Platzhalter")</small>
+            </div>
+        </div>
+
+        @if (AppId > 0)
+        {
+            <button class="btn btn-warning btn-sm fw-bold animate-pulse" @onclick="GoToContentEditor">
+                <i class="bi bi-pencil-fill"></i> Texte im Content-Editor bearbeiten
+            </button>
+        }
+
+        <div class="preview-container">
+            <div class="a4-wrapper shadow-lg">
+                <iframe id="previewIframe" class="a4-iframe"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    [Parameter] public int AppId { get; set; }
+    private HtmlTemplate template = new();
+    private ResumeData userProfile = new();
+    private ApplicationRecord? selectedApp;
+    private List<ApplicationRecord> allApplications = new();
+    private List<HtmlTemplate> savedTemplates = new();
+    private string activeTab = "letter";
+    private DotNetObjectReference<TemplateEditor>? objRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        objRef = DotNetObjectReference.Create(this);
+        await LoadTemplatesList();
+        userProfile = await ProfService.LoadProfileAsync() ?? new();
+        allApplications = await DbService.GetAllApplicationsAsync();
+
+        if (Id > 0)
+        {
+            template = await DbService.GetTemplateAsync(Id) ?? new();
+            FormatAllHtml(); // Einmal beim Laden alles schön machen
+        }
+
+        if (AppId > 0) selectedApp = await DbService.GetApplicationAsync(AppId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await UpdatePreview();
+    }
+
+    private async Task LoadTemplatesList() => savedTemplates = await DbService.GetAllTemplatesAsync();
+
+    private async Task SetTab(string tab)
+    {
+        // VOR dem Umschalten den aktuellen Stand formatieren
+        FormatAllHtml();
+        activeTab = tab;
+        await UpdatePreview();
+        StateHasChanged();
+    }
+
+    private void NewTemplate() => Nav.NavigateTo("/template-editor", true);
+
+    private string CurrentHtml
+    {
+        get => activeTab switch { "cover" => template.HtmlDeckblatt, "cv" => template.HtmlLebenslauf, _ => template.HtmlAnschreiben };
+        set
+        {
+            if (activeTab == "cover") template.HtmlDeckblatt = value;
+            else if (activeTab == "cv") template.HtmlLebenslauf = value;
+            else template.HtmlAnschreiben = value;
+            _ = UpdatePreview();
+        }
+    }
+
+    private void FormatAllHtml()
+    {
+        template.HtmlDeckblatt = FormatHtml(template.HtmlDeckblatt);
+        template.HtmlAnschreiben = FormatHtml(template.HtmlAnschreiben);
+        template.HtmlLebenslauf = FormatHtml(template.HtmlLebenslauf);
+
+        // Jetzt auch das CSS formatieren
+        template.CustomCss = FormatCss(template.CustomCss);
+    }
+
+    private string FormatCss(string? css)
+    {
+        if (string.IsNullOrWhiteSpace(css)) return "";
+
+        // 1. Alle unnötigen Leerzeichen/Umbüche entfernen (Minify-Ansatz als Basis)
+        var cleaned = System.Text.RegularExpressions.Regex.Replace(css, @"\s+", " ").Trim();
+
+        // 2. Struktur reinbringen
+        cleaned = cleaned.Replace("{", " {\n  ")
+                         .Replace("}", "\n}\n\n")
+                         .Replace(";", ";\n  ")
+                         .Replace(", ", ",")
+                         .Replace(",", ", ");
+
+        // 3. Letzte Korrekturen (Doppel-Einrückungen verhindern)
+        return cleaned.Replace("  \n", "\n").Trim();
+    }
+
+    private string FormatHtml(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return "";
+        try
+        {
+            var parser = new HtmlParser();
+            var document = parser.ParseFragment(raw, null);
+            using (var writer = new System.IO.StringWriter())
+            {
+                var formatter = new PrettyMarkupFormatter
+                {
+                    Indentation = "  ",
+                    NewLine = "\n"
+                };
+                document.ToHtml(writer, formatter);
+                return writer.ToString();
+            }
+        }
+        catch { return raw ?? ""; }
+    }
+
+    private async Task LoadSelectedTemplate(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int id) && id > 0)
+            Nav.NavigateTo($"/template-editor/{id}/{(AppId > 0 ? AppId : 0)}", true);
+    }
+
+    private async Task OnAppChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int appId))
+        {
+            AppId = appId;
+            selectedApp = appId > 0 ? await DbService.GetApplicationAsync(appId) : null;
+            await UpdatePreview();
+            Nav.NavigateTo($"/template-editor/{template.Id}/{appId}");
+        }
+    }
+
+    private async Task UpdatePreview()
+    {
+        string fullDoc = $@"<html><head><style>
+            body {{ margin: 0; padding: 0; font-family: sans-serif; -webkit-print-color-adjust: exact; }}
+            {template.CustomCss}
+        </style></head>
+        <body>{DbService.RenderTemplate(CurrentHtml, userProfile, selectedApp)}</body></html>";
+
+        await JS.InvokeVoidAsync("updateIframeContent", "previewIframe", fullDoc);
+    }
+
+    private async Task SaveTemplate()
+    {
+        FormatAllHtml(); // Sauber speichern
+        await DbService.SaveTemplateAsync(template);
+        await LoadTemplatesList();
+    }
+
+    private async Task InsertField(ChangeEventArgs e)
+    {
+        string field = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrEmpty(field))
+        {
+            await JS.InvokeVoidAsync("insertTextAtCursor", "html-editor-textarea", field);
+            CurrentHtml = await JS.InvokeAsync<string>("getElementValue", "html-editor-textarea");
+        }
+    }
+
+    private async Task CopyPromptToClipboard()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Erstelle ein Design (JSON: css, deckblatt, anschreiben, lebenslauf).");
+        sb.AppendLine("Verwende EXAKT diese Platzhalter:");
+        sb.AppendLine("- Basis: {{Name}}, {{Title}}, {{Email}}, {{Phone}}, {{Location}}, {{Website}}, {{Photo}}");
+        sb.AppendLine("- Job: {{JobTitle}}, {{Company}}, {{Street}}, {{ZipCode}}, {{City}}, {{Date}}");
+        sb.AppendLine("- Texte: {{LetterText}}");
+        sb.AppendLine("- Listen: {{CV_Experience}}, {{CV_Education}}, {{Skills_Content}}, {{Competences_Content}}");
+        sb.AppendLine("Das CSS muss professionell sein.");
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", sb.ToString());
+    }
+
+    private async Task OnImportJsonInput(ChangeEventArgs e)
+    {
+        try
+        {
+            string raw = e.Value?.ToString() ?? "";
+            int start = raw.IndexOf("{");
+            if (start < 0) return;
+            using var doc = JsonDocument.Parse(raw.Substring(start));
+            var root = doc.RootElement;
+
+            template.CustomCss = root.GetProperty("css").GetString() ?? "";
+            template.HtmlDeckblatt = FormatHtml(root.GetProperty("deckblatt").GetString());
+            template.HtmlAnschreiben = FormatHtml(root.GetProperty("anschreiben").GetString());
+            template.HtmlLebenslauf = FormatHtml(root.GetProperty("lebenslauf").GetString());
+
+            await UpdatePreview();
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    private async Task GoToContentEditor()
+    {
+        if (selectedApp == null || template == null) return;
+        var profile = await ProfService.LoadProfileAsync();
+
+        selectedApp.HtmlCover = TemplateEngine.Render(template.HtmlDeckblatt, profile, selectedApp);
+        selectedApp.HtmlLetter = TemplateEngine.Render(template.HtmlAnschreiben, profile, selectedApp);
+        selectedApp.HtmlResume = TemplateEngine.Render(template.HtmlLebenslauf, profile, selectedApp);
+        selectedApp.AppliedCss = template.CustomCss;
+
+        await DbService.SaveApplicationAsync(selectedApp);
+        Nav.NavigateTo($"/content-editor/{selectedApp.Id}/{template.Id}");
+    }
+
+    public void Dispose() => objRef?.Dispose();
+}

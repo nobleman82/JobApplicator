@@ -1,0 +1,184 @@
+/* Haupt-Container im modernen Dunkel-Look */
+.editor-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #0f172a; /* Sehr dunkles Blau-Grau passend zum neuen Stil */
+}
+
+/* Toolbar Anpassung */
+.editor-toolbar {
+    background-color: #1e293b !important; /* Slate-800 */
+    border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+    padding: 0.75rem 1.5rem !important;
+}
+
+    /* Tab-Buttons im Violett-Stil */
+    .editor-toolbar .btn-group .btn {
+        border-radius: 8px;
+        margin-right: 4px;
+        transition: all 0.2s ease;
+        font-weight: 500;
+    }
+
+    .editor-toolbar .btn-primary {
+        background-color: #8b5cf6 !important;
+        border-color: #8b5cf6 !important;
+        box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
+    }
+
+/* Editor Werkzeuge (Bold, Italic etc.) */
+.btn-editor-tool {
+    border: 1px solid #e2e8f0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    color: #475569;
+    border-radius: 8px !important;
+    margin: 0 2px;
+    transition: all 0.2s ease;
+}
+
+    .btn-editor-tool:hover {
+        background: #f1f5f9;
+        color: #8b5cf6;
+        border-color: #8b5cf6;
+    }
+
+/* Hauptbereich Layout */
+.editor-main {
+    display: grid;
+    grid-template-columns: 1fr 500px; /* Linker Bereich breiter wie gewünscht */
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* Vorschau-Panel (Hintergrund der A4 Seite) */
+.preview-panel {
+    padding: 40px;
+    display: flex;
+    justify-content: center;
+    overflow-y: auto;
+    background: #334155; /* Slate-700 */
+    background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+/* Das "Papier" */
+.a4-container {
+    width: 210mm;
+    background: white;
+    min-height: 297mm;
+    border-radius: 4px;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+}
+
+.preview-iframe {
+    width: 100%;
+    height: 297mm;
+    border: none;
+    border-radius: 4px;
+}
+
+/* Rechtes Code-Panel */
+.code-panel {
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+    border-left: 1px solid #e2e8f0 !important;
+}
+
+    /* Überschriften im Code-Panel */
+    .code-panel h6 {
+        color: #64748b !important;
+        letter-spacing: 0.05em;
+        margin-top: 10px;
+    }
+
+/* Textareas (Monokai/VSCode Style) */
+.code-area, .css-area {
+    width: 100%;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 12px;
+    background: #1e1e1e !important;
+    color: #9cdcfe !important; /* VSCode Light Blue */
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid #334155;
+    resize: none;
+    line-height: 1.5;
+}
+
+.css-area {
+    color: #ce9178 !important; /* CSS Property Brown */
+    height: 200px;
+    min-height: 200px;
+}
+
+.code-area {
+    flex-grow: 1;
+    min-height: 300px;
+}
+
+/* Dateiupload Bereich */
+.bg-white.border.rounded {
+    border-radius: 12px !important;
+    border: 1px dashed #cbd5e1 !important;
+    background: #ffffff;
+    padding: 15px !important;
+}
+
+/* Spezial-Buttons */
+.btn-xs {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.7rem;
+    border-radius: 6px;
+}
+
+/* Base64 Images Umbruch vermeiden -- Besser lesbar*/
+.code-area {
+    /* ... deine bisherigen Styles ... */
+    white-space: pre; /* Verhindert Zeilenumbruch innerhalb der Base64-Strings */
+    overflow-wrap: normal;
+    overflow-x: auto;
+}
+
+/* Spezial-Kniff: Wenn du die Bilder im Editor-Bereich siehst (WYSIWYG) */
+#editor-iframe ::deep img[src^="data:image"] {
+    max-height: 100px;
+    outline: 2px dashed #8b5cf6;
+    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%238b5cf6' d='M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z'/%3E%3C/svg%3E");
+    /* Dieser Trick ersetzt das Bild in der Editor-Ansicht durch ein Icon, 
+       behält aber im Code die Daten bei */
+}
+
+/* Druck-Konfiguration (Checkboxes) */
+.bg-secondary.px-2.rounded {
+    background-color: rgba(255,255,255,0.1) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    padding: 5px 12px !important;
+}
+
+/* Scrollbar Styling für die Panels */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }

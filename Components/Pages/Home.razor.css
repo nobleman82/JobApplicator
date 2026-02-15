@@ -1,0 +1,134 @@
+/* Dashboard Container & Grid */
+.stat-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.2rem;
+    border: 1px solid #e2e8f0;
+    transition: transform 0.2s ease;
+}
+
+    .stat-card:hover {
+        transform: translateY(-3px);
+    }
+
+/* Status-Ring Styles */
+.progress-ring {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 10px;
+    font-weight: 800;
+    font-size: 1.1rem;
+    border: 6px solid #f1f5f9;
+}
+
+/* Tabellen & Form-Elemente Integration */
+.job-row {
+    vertical-align: middle;
+}
+
+.status-select {
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    width: auto;
+    border: none;
+}
+
+/* Status Farben für das Select */
+.bg-entwurf {
+    background-color: #f1f5f9;
+    color: #64748b;
+}
+
+.bg-versendet {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+.bg-abgesagt {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.bg-zusage {
+    background-color: #8b5cf6;
+    color: white;
+}
+
+/* Gantt Chart Styling */
+. /* GANTT KORREKTUR */
+/* Haupt-Container für die Timeline */
+.gantt-wrapper {
+    min-height: 180px; /* Genug Platz für die Stapelung */
+    background: #f8f9fa;
+    border-radius: 8px;
+    position: relative;
+    border: 1px solid #edf2f7;
+}
+
+/* Die einzelnen Segmente (Entwurf, Warten, Entscheidung) */
+.gantt-segment {
+    height: 12px;
+    position: absolute;
+    transition: all 0.2s ease;
+    cursor: help;
+    z-index: 2;
+}
+
+    .gantt-segment:hover {
+        filter: brightness(1.1);
+        transform: scaleY(1.3);
+        z-index: 100;
+    }
+
+/* Hilfsklasse für saubere Stapelung der Labels */
+.gantt-label {
+    position: absolute;
+    font-size: 0.65rem;
+    color: #475569;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none; /* Klicks gehen durch das Label auf den Balken */
+}
+
+/* Statistik-Karten Optimierung */
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* Status-Auswahl in der Tabelle */
+.status-select {
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 6px;
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+    background-color: white;
+    border: 1px solid #e2e8f0;
+}
+
+/* Tabellen-Zeilen Hover */
+.job-row:hover {
+    background-color: #f8fafc !important;
+}
+
+/* Date-Input Styling */
+input[type="date"] {
+    font-size: 0.85rem;
+    color: #475569;
+}
+
+/* Verstecke Standard-Pfeile im Date-Input für cleanen Look */
+input[type="date"]::-webkit-inner-spin-button,
+input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.5;
+}

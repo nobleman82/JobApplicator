@@ -1,0 +1,151 @@
+@page "/settingsai"
+@using JobApplicator2.Services
+@inject DatabaseService DbService
+@inject AiService AiSvc
+
+<div class="container mt-4">
+    <h3><i class="bi bi-cpu"></i> KI-Konfiguration</h3>
+    <hr />
+
+    @if (config == null)
+    {
+        <p>Lade Einstellungen...</p>
+    }
+    else
+    {
+        <div class="card p-4 shadow-sm">
+            <div class="mb-3">
+                <label class="form-label font-weight-bold">Standard KI-Anbieter</label>
+                <select @bind="config.SelectedProvider" class="form-select">
+                    <option value="Ollama">Ollama (Lokal)</option>
+                    <option value="Gemini">Google Gemini (Cloud)</option>
+                </select>
+            </div>
+
+            @if (config.SelectedProvider == "Ollama")
+            {
+                <div class="alert alert-info">
+                    <h5>Ollama Einstellungen</h5>
+                    <div class="mb-2">
+                        <label>Server URL</label>
+                        <input @bind="config.OllamaUrl" class="form-control" />
+                    </div>
+                    <div class="mb-2">
+                        <label>Standard Modell</label>
+                        <div class="input-group">
+                            <select @bind="config.DefaultOllamaModel" class="form-select">
+                                @foreach (var model in availableOllamaModels)
+                                {
+                                    <option value="@model">@model</option>
+                                }
+                            </select>
+                            <button class="btn btn-outline-secondary" @onclick="RefreshOllamaModels">Aktualisieren</button>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    <h5>Gemini Einstellungen</h5>
+                    <div class="mb-3">
+                        <label>API Key</label>
+                        <input type="password" @bind="config.GeminiApiKey" class="form-control" placeholder="AIza..." />
+                        <small class="text-muted">Holen Sie sich einen kostenlosen Key im <a href="https://aistudio.google.com/" target="_blank">Google AI Studio</a>.</small>
+                    </div>
+
+                    <div class="mb-2">
+                        <label>Verfügbare Gemini Modelle</label>
+                        <div class="input-group">
+                            @if (availableGeminiModels.Any())
+                            {
+                                <select @bind="config.GeminiModel" class="form-select">
+                                    @foreach (var model in availableGeminiModels)
+                                    {
+                                        <option value="@model">@model</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <input type="text" @bind="config.GeminiModel" class="form-control" placeholder="z.B. gemini-1.5-flash" />
+                            }
+                            <button class="btn btn-outline-secondary" @onclick="RefreshGeminiModels" disabled="@string.IsNullOrEmpty(config.GeminiApiKey)">
+                                Modelle laden
+                            </button>
+                        </div>
+                        @if (isGeminiLoading)
+                        {
+                            <div class="spinner-border spinner-border-sm mt-1" role="status"></div>
+                            <small class="ms-1">Frage Modelle ab...</small>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(feedbackMessage))
+            {
+                <div class="alert alert-success py-2">@feedbackMessage</div>
+            }
+
+            <button class="btn btn-primary mt-3" @onclick="Save">Einstellungen speichern</button>
+        </div>
+    }
+</div>
+
+@code {
+    private AiConfig config;
+    private List<string> availableOllamaModels = new();
+    private List<string> availableGeminiModels = new();
+    private string feedbackMessage = "";
+    private bool isGeminiLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        config = await DbService.GetAiConfigAsync();
+        await RefreshOllamaModels();
+        // Wenn ein Key da ist, versuchen wir die Modelle direkt zu laden
+        if (!string.IsNullOrEmpty(config.GeminiApiKey))
+        {
+            await RefreshGeminiModels();
+        }
+    }
+
+    private async Task RefreshOllamaModels()
+    {
+        try { availableOllamaModels = await AiSvc.GetOllamaModelsAsync(); } catch { }
+    }
+
+    private async Task RefreshGeminiModels()
+    {
+        if (string.IsNullOrEmpty(config.GeminiApiKey)) return;
+
+        isGeminiLoading = true;
+        StateHasChanged();
+        try
+        {
+            availableGeminiModels = await AiSvc.ListGeminiModelsAsync();
+            if (availableGeminiModels.Any() && string.IsNullOrEmpty(config.GeminiModel))
+            {
+                config.GeminiModel = availableGeminiModels.FirstOrDefault(m => m.Contains("flash"))
+                                     ?? availableGeminiModels.First();
+            }
+        }
+        catch { /* Fehlerbehandlung im Service */ }
+        finally
+        {
+            isGeminiLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Save()
+    {
+        await DbService.SaveAiConfigAsync(config);
+        feedbackMessage = "Einstellungen wurden gespeichert!";
+        StateHasChanged();
+        await Task.Delay(3000);
+        feedbackMessage = "";
+        StateHasChanged();
+    }
+}

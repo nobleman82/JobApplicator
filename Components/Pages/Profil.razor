@@ -1,0 +1,377 @@
+@page "/profil"
+@using JobApplicator2.Services
+@inject ProfileService ProfileSvc
+
+<div class="profile-container">
+    <h1 class="title">Mein Profil</h1>
+    <p>Diese Daten bilden die Basis für Anschreiben und Lebenslauf.</p>
+
+    <div class="section">
+        <h3>Persönliche Informationen</h3>
+        <div class="profile-header-edit">
+            <div class="photo-upload">
+                @if (!string.IsNullOrEmpty(Model.Personal?.ProfilePictureBase64))
+                {
+                    <img src="@Model.Personal.ProfilePictureBase64" class="preview-img" />
+                }
+                else
+                {
+                    <div class="photo-placeholder">Kein Foto</div>
+                }
+                <InputFile OnChange="HandleFileSelected" class="file-input" />
+                <button class="btn-del btn-sm" @onclick='() => Model.Personal.ProfilePictureBase64 = ""'>Löschen</button>
+            </div>
+
+            <div class="input-grid">
+                <div class="field">
+                    <label>Name</label>
+                    <input @bind="Model.Personal.Name" />
+                </div>
+                <div class="field">
+                    <label>Titel</label>
+                    <input @bind="Model.Personal.Title" />
+                </div>
+                <div class="field">
+                    <label>E-Mail</label>
+                    <input @bind="Model.Personal.Email" />
+                </div>
+                <div class="field">
+                    <label>Telefon</label>
+                    <input @bind="Model.Personal.Phone" placeholder="+43..." />
+                </div>
+                <div class="field">
+                    <label>Ort</label>
+                    <input @bind="Model.Personal.Location" />
+                </div>
+                <div class="field">
+                    <label>Website (optional)</label>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input @bind="Model.Personal.Website" @oninput="UpdateQrPreview" placeholder="https://www..." />
+                        @if (!string.IsNullOrEmpty(Model.Personal.Website))
+                        {
+                            <div class="qr-preview-box shadow-sm border p-1 bg-white">
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=50x50&data=@(Uri.EscapeDataString(Model.Personal.Website))"
+                                     alt="QR Code Vorschau" title="Vorschau deines Website-QR-Codes" />
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="section">
+                <h3>Qualifikationen (Skills %)</h3>
+                @foreach (var skill in Model.Skills)
+                {
+                    <div class="dynamic-row">
+                        <input @bind="skill.Name" placeholder="z.B. C#" />
+                        <input @bind="skill.Level" style="width: 70px;" placeholder="80%" />
+                        <button class="btn-del" @onclick="() => Model.Skills.Remove(skill)">X</button>
+                    </div>
+                }
+                <button class="btn-alt" @onclick='() => Model.Skills.Add(new Skill())'>+ Skill</button>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="section">
+                <h3>Kompetenzen (Aufzählung)</h3>
+                @for (int i = 0; i < Model.Competences.Count; i++)
+                {
+                    var index = i; // Lokale Kopie für den Lambda-Ausdruck
+                                   <div class="dynamic-row">
+                                       <input value="@Model.Competences[index]"
+                                              @onchange='(e) => UpdateCompetence(index, e.Value?.ToString())'
+                                              placeholder="z.B. Teamfähigkeit" />
+                                       <button class="btn-del" @onclick="() => Model.Competences.RemoveAt(index)">X</button>
+                                   </div>
+                }
+                <button class="btn-alt" @onclick='() => Model.Competences.Add("")'>+ Kompetenz</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>Berufserfahrung</h3>
+        @foreach (var exp in Model.Experiences)
+        {
+            <div class="exp-card">
+                <div class="input-grid">
+                    <input @bind="exp.Company" placeholder="Firma / Organisation" />
+                    <input @bind="exp.Period" placeholder="Zeitraum (z.B. 2020 - Heute)" />
+                </div>
+                <input @bind="exp.Role" placeholder="Deine Rolle / Position" class="mt-2" />
+                <textarea @bind="exp.Description" placeholder="Tätigkeiten & Erfolge..." class="mt-2 text-area-small"></textarea>
+                <div class="text-end">
+                    <button class="btn-del btn-sm mt-1" @onclick="() => Model.Experiences.Remove(exp)">Eintrag entfernen</button>
+                </div>
+            </div>
+        }
+        <button class="btn-alt" @onclick="() => Model.Experiences.Add(new Experience())">+ Berufserfahrung</button>
+    </div>
+
+    <div class="section">
+        <h3>Schulbildung / Studium</h3>
+        @foreach (var edu in Model.EducationHistory)
+        {
+            <div class="exp-card edu-card">
+                <div class="input-grid">
+                    <input @bind="edu.School" placeholder="Schule / Universität" />
+                    <input @bind="edu.Period" placeholder="Zeitraum" />
+                </div>
+                <input @bind="edu.Degree" placeholder="Abschluss / Fachrichtung" class="mt-2" />
+                <textarea @bind="edu.Notes" placeholder="Anmerkungen / Schwerpunkte..." class="mt-2 text-area-small"></textarea>
+                <div class="text-end">
+                    <button class="btn-del btn-sm mt-1" @onclick="() => Model.EducationHistory.Remove(edu)">Eintrag entfernen</button>
+                </div>
+            </div>
+        }
+        <button class="btn-alt" @onclick="() => Model.EducationHistory.Add(new Education())">+ Bildungsweg</button>
+    </div>
+
+    <div class="footer-actions">
+        <button class="btn-save" @onclick="SaveData">💾 Profil speichern</button>
+        @if (isSaved)
+        {
+            <span class="status-msg">Profil erfolgreich gespeichert!</span>
+        }
+    </div>
+</div>
+
+<style>
+    /* ... (Styles bleiben identisch wie in deiner Vorlage) ... */
+    .profile-container {
+        padding: 2rem;
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .title {
+        color: #512bd4;
+        font-weight: 800;
+        border-bottom: 3px solid #512bd4;
+        display: inline-block;
+        margin-bottom: 1.5rem;
+    }
+
+    .section {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid #eee;
+    }
+
+        .section h3 {
+            font-size: 1.1rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 1.2rem;
+            border-left: 4px solid #512bd4;
+            padding-left: 10px;
+        }
+
+    .profile-header-edit {
+        display: flex;
+        gap: 2rem;
+        align-items: flex-start;
+    }
+
+    .photo-upload {
+        width: 150px;
+        text-align: center;
+    }
+
+    .preview-img {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #512bd4;
+        margin-bottom: 0.5rem;
+    }
+
+    .photo-placeholder {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: #eee;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 0.5rem;
+        color: #aaa;
+        border: 2px dashed #ccc;
+    }
+
+    .file-input {
+        font-size: 0.7rem;
+        width: 100%;
+        margin-bottom: 5px;
+    }
+
+    .input-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        flex-grow: 1;
+    }
+
+    .field label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: bold;
+        color: #888;
+        margin-bottom: 0.2rem;
+    }
+
+    .field input, .exp-card input, .text-area-small {
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.9rem;
+    }
+
+    .text-area-small {
+        height: 80px;
+        resize: vertical;
+    }
+
+    .dynamic-row {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .exp-card {
+        background: #fcfcfc;
+        border: 1px solid #efefef;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .edu-card {
+        border-left: 4px solid #28a745;
+    }
+
+    .btn-save {
+        background: #28a745;
+        color: white;
+        padding: 1rem 3rem;
+        border: none;
+        border-radius: 50px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 1.1rem;
+        transition: transform 0.2s;
+    }
+
+        .btn-save:hover {
+            transform: scale(1.02);
+            background: #218838;
+        }
+
+    .btn-alt {
+        background: transparent;
+        color: #512bd4;
+        border: 2px solid #512bd4;
+        padding: 0.4rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .btn-del {
+        background: #ff4d4d15;
+        color: #ff4d4d;
+        border: 1px solid #ff4d4d;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .btn-sm {
+        font-size: 0.7rem;
+    }
+
+    .status-msg {
+        color: #28a745;
+        margin-left: 1.5rem;
+        font-weight: bold;
+        animation: fadeIn 0.5s;
+    }
+
+    .qr-preview-box {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+    }
+
+        .qr-preview-box img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+</style>
+
+@code {
+    private ResumeData Model = new() { Personal = new() };
+    private bool isSaved = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var loadedData = await ProfileSvc.LoadProfileAsync();
+        if (loadedData != null)
+        {
+            Model = loadedData;
+        }
+
+        // Sicherstellen, dass keine Listen null sind (wichtig für UI-Rendering)
+        Model.Skills ??= new();
+        Model.Competences ??= new();
+        Model.Experiences ??= new();
+        Model.EducationHistory ??= new();
+        Model.Personal ??= new();
+    }
+
+    private void UpdateCompetence(int index, string? value)
+    {
+        if (value != null)
+            Model.Competences[index] = value;
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            var buffer = new byte[file.Size];
+            await file.OpenReadStream(2 * 1024 * 1024).ReadAsync(buffer);
+            Model.Personal.ProfilePictureBase64 = $"data:{file.ContentType};base64,{Convert.ToBase64String(buffer)}";
+        }
+    }
+
+    private async Task SaveData()
+    {
+        await ProfileSvc.SaveProfileAsync(Model);
+        isSaved = true;
+        StateHasChanged();
+        await Task.Delay(3000);
+        isSaved = false;
+        StateHasChanged();
+    }
+
+    private void UpdateQrPreview(ChangeEventArgs e)
+    {
+        Model.Personal.Website = e.Value?.ToString() ?? "";
+        StateHasChanged();
+    }
+}

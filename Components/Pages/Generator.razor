@@ -1,0 +1,459 @@
+@page "/generator"
+@using JobApplicator2.Services
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@inject ProfileService ProfileSvc
+@inject DatabaseService DbService
+@inject AiService AiSvc
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="gen-container p-4">
+    <h1 class="title mb-4">KI Job-Analyse & Strategie</h1>
+
+    @if (userProfile == null || aiConfig == null)
+    {
+        <div class="alert alert-info shadow-sm">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Lade Profildaten und KI-Konfiguration...
+        </div>
+    }
+    else
+    {
+        <div class="info-bar d-flex justify-content-between align-items-center mb-3 p-2 bg-light border rounded shadow-sm">
+            <div>
+                <span>Profil: <strong>@userProfile.Personal.Name</strong></span>
+                <span class="ms-3">Status: <span class="badge @(isGenerating ? "bg-warning text-dark" : "bg-success")">@(isGenerating? statusMessage : "Bereit")</span></span>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-dark" @onclick="ExportForGeminiWeb">
+                    Externes Gemini (JSON Export) 📋
+                </button>
+                <div class="ms-2 border-start ps-2">
+                    <span class="text-muted small">KI-Quelle:</span>
+                    <span class="badge bg-primary">@aiConfig.SelectedProvider</span>
+                    <span class="text-muted small ms-1">(@(aiConfig.SelectedProvider == "Ollama" ? aiConfig.DefaultOllamaModel : aiConfig.GeminiModel))</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-grid" style="display: grid; grid-template-columns: 1fr 350px; gap: 20px;">
+            <div class="input-section">
+                <div class="input-card mb-3">
+                    <label class="form-label fw-bold">Stellenanzeige (Text hier einfügen)</label>
+                    <textarea @bind="jobDescription" class="form-control" style="height: 350px;" placeholder="Kopieren Sie hier den Anzeigentext hinein..."></textarea>
+                </div>
+
+                <div class="actions">
+                    <button class="btn btn-primary btn-lg w-100 shadow" @onclick="GenerateAnalysisAndLetter" disabled="@isGenerating">
+                        @if (isGenerating)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                            <span> @statusMessage</span>
+                        }
+                        else
+                        {
+                            <span>🚀 Analyse & Anschreiben generieren</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            <div class="widget-section">
+                <div class="card mb-2 shadow-sm border-primary">
+                    <div class="card-body p-2">
+                        <h4 class="h6 border-bottom pb-1 text-primary">📍 Stammdaten</h4>
+                        <div class="mb-1">
+                            <label class="small fw-bold">Jobtitel</label>
+                            <input type="text" class="form-control form-control-sm" @bind="extractedJobTitle" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="small fw-bold">Unternehmen</label>
+                            <input type="text" class="form-control form-control-sm" @bind="extractedCompany" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="small fw-bold">Ansprechpartner</label>
+                            <input type="text" class="form-control form-control-sm" @bind="extractedContact" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="small fw-bold">Straße</label>
+                            <input type="text" class="form-control form-control-sm" @bind="extractedStreet" />
+                        </div>
+                        <div class="row g-1">
+                            <div class="col-4">
+                                <label class="small fw-bold">PLZ</label>
+                                <input type="text" class="form-control form-control-sm" @bind="extractedZip" />
+                            </div>
+                            <div class="col-8">
+                                <label class="small fw-bold">Ort</label>
+                                <input type="text" class="form-control form-control-sm" @bind="extractedCity" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @* NEUES WIDGET: ZUSAMMENFASSUNG (Die extra Schleife) *@
+                <div class="card mb-2 shadow-sm border-info bg-light">
+                    <div class="card-body p-2">
+                        <h4 class="h6 border-bottom pb-1 text-info">📝 KI-Zusammenfassung</h4>
+                        <textarea class="form-control form-control-sm"
+                                  style="height: 120px; font-size: 0.85rem; line-height: 1.4; border: 1px solid #bee5eb;"
+                                  @bind="extractedSummary"
+                                  placeholder="Wird nach Analyse generiert..."></textarea>
+                        <div class="text-muted" style="font-size: 0.65rem; margin-top: 3px;">
+                            Diese Kurzfassung wird im Dashboard angezeigt.
+                        </div>
+                    </div>
+                </div>
+                <div class="card mb-2 shadow-sm">
+                    <div class="card-body p-2">
+                        <h4 class="h6 border-bottom pb-1">💰 Konditionen</h4>
+                        <div class="mb-1">
+                            <label class="small">Gehalt</label>
+                            <input type="text" class="form-control form-control-sm" @bind="extractedSalary" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="small">Arbeitszeit</label>
+                            <input type="text" class="form-control form-control-sm" @bind="extractedWorkTime" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-body p-2">
+                        <h4 class="h6 border-bottom pb-1">🎯 Anforderungen (KI extrahiert)</h4>
+                        <textarea class="form-control form-control-sm" style="height: 100px; font-size: 0.75rem;" @bind="rawRequirements"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-3 d-flex justify-content-between">
+                <span><strong>Fehler:</strong> @errorMessage</span>
+                <button type="button" class="btn-close" @onclick='(() => errorMessage = "")'></button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(generatedResult) || isGenerating)
+        {
+            <div class="result-card mt-4 shadow-lg border rounded overflow-hidden">
+                <div class="result-header bg-dark text-white p-2 d-flex justify-content-between align-items-center">
+                    <h3 class="m-0 h6">📄 Entwurf Anschreiben</h3>
+                    @if (isGenerating)
+                    {
+                        <span class="badge bg-info animate-pulse">KI arbeitet...</span>
+                    }
+                </div>
+                <textarea class="result-text w-100 p-4"
+                          style="min-height: 500px; border:none; outline:none; font-family: 'Segoe UI', serif; line-height: 1.6; background-color: #fff;"
+                          @bind="generatedResult"></textarea>
+
+                <div class="result-footer p-3 border-top bg-light d-flex justify-content-between">
+                    <button class="btn btn-outline-secondary" @onclick='() => generatedResult = ""'>Verwerfen</button>
+                    <button class="btn btn-success px-5 shadow" @onclick="SaveAndGoToDesign" disabled="@isGenerating">
+                        💾 Speichern & zum Design-Editor
+                    </button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .gen-container {
+        max-width: 1200px;
+        margin: auto;
+    }
+
+    .animate-pulse {
+        animation: pulse 1.5s infinite;
+    }
+
+    @@keyframes pulse {
+        0% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.5;
+        }
+
+        100% {
+            opacity: 1;
+        }
+    }
+
+    .title {
+        font-weight: 800;
+        color: #2c3e50;
+        border-left: 5px solid #007bff;
+        padding-left: 15px;
+    }
+</style>
+
+@code {
+    private ResumeData? userProfile;
+    private AiConfig? aiConfig;
+    private string jobDescription = "";
+    private string generatedResult = "";
+    private string errorMessage = "";
+    private string statusMessage = "";
+    private bool isGenerating = false;
+
+    // Extrahierte Daten
+    private string extractedJobTitle = "";
+    private string extractedCompany = "";
+    private string extractedContact = "";
+    private string extractedStreet = "";
+    private string extractedZip = "";
+    private string extractedCity = "";
+    private string extractedSalary = "";
+    private string extractedWorkTime = "";
+    private string rawRequirements = "";
+    private string extractedSummary = ""; 
+
+    protected override async Task OnInitializedAsync()
+    {
+        userProfile = await ProfileSvc.LoadProfileAsync();
+        aiConfig = await DbService.GetAiConfigAsync();
+    }
+
+    private async Task GenerateAnalysisAndLetter()
+    {
+        if (string.IsNullOrWhiteSpace(jobDescription))
+        {
+            errorMessage = "Bitte geben Sie eine Stellenbeschreibung ein.";
+            return;
+        }
+
+        isGenerating = true;
+        errorMessage = "";
+        generatedResult = "";
+        statusMessage = "🔍 Analysiere Anzeige...";
+        StateHasChanged();
+
+        try
+        {
+            // --- 1. SCHRITT: EXTRAKTION ---
+            string extractionPrompt = GetExtractionPrompt();
+            string jsonRaw = await AiSvc.CallAiAsync(extractionPrompt);
+            ParseJsonResult(jsonRaw);
+
+
+            // 3. SCHRITT: Seperater Aufruf für die Kurzfassung (Summary)
+            statusMessage = "📝 Erstelle Kurzfassung...";
+            StateHasChanged();
+            string summaryPrompt = GetSummaryPrompt();
+            extractedSummary = await AiSvc.CallAiAsync(summaryPrompt);
+
+
+
+            // --- 3. SCHRITT: ANSCHREIBEN ---
+            statusMessage = "✍️ Schreibe Anschreiben...";
+            StateHasChanged();
+
+            string draftPrompt = GetDraftPrompt();
+
+            await AiSvc.CallAiAsync(draftPrompt, useStreaming: true, onStreamChunk: (chunk) =>
+            {
+                generatedResult += chunk;
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "KI Fehler: " + ex.Message;
+        }
+        finally
+        {
+            isGenerating = false;
+            statusMessage = "";
+            StateHasChanged();
+        }
+    }
+
+
+    private string GetSummaryPrompt()
+    {
+        bool isOllama = aiConfig?.SelectedProvider == "Ollama";
+
+        if (isOllama)
+        {
+            return $@"DU BIST EIN EXPERTE FÜR RECRUITING-ANALYSEN.
+Analysiere die folgende Stellenbeschreibung und erstelle eine strukturierte, prägnante Zusammenfassung für ein Dashboard.
+
+REGELN:
+1. Maximal 3-4 Sätze.
+2. Fokus auf: Kernaufgabe, Unternehmenskultur (falls erkennbar) und das wichtigste Alleinstellungsmerkmal der Stelle.
+3. Tonfall: Professionell, sachlich.
+4. KEINE Einleitung wie ""Hier ist die Zusammenfassung"". Gib NUR den Text aus.
+
+STELLENBESCHREIBUNG:
+{jobDescription}";
+        }
+
+        return $"Fasse diese Stellenanzeige in 3 prägnanten Sätzen für ein Dashboard zusammen. Fokus auf Kernaufgabe und USP der Stelle: {jobDescription}";
+    }
+
+    private string GetExtractionPrompt()
+    {
+        bool isOllama = aiConfig?.SelectedProvider == "Ollama";
+
+        if (isOllama)
+        {
+            return $@"DU BIST EIN DATEN-EXTRAKTIONS-SYSTEM.
+Analysiere die Stellenanzeige und extrahiere exakt diese Felder als JSON. 
+WICHTIG: Antworte NUR mit dem JSON-Objekt, kein Text davor oder danach!
+
+Struktur:
+{{
+  ""JobTitle"": ""Titel des Jobs"",
+  ""Company"": ""Name der Firma"",
+  ""ContactPerson"": ""Name falls vorhanden"",
+  ""Street"": ""Straße"",
+  ""Zip"": ""PLZ"",
+  ""City"": ""Ort"",
+  ""Requirements"": [""Skill 1"", ""Skill 2""],
+  ""Salary"": ""Gehaltsinfo"",
+  ""WorkTime"": ""Arbeitszeitmodell""
+}}
+
+ANZEIGETEXT:
+{jobDescription}";
+        }
+
+        // Standard-Prompt für Gemini
+        return $@"Analysiere diese Stellenanzeige und extrahiere die Daten als JSON.
+Struktur: {{ ""JobTitle"": """", ""Company"": """", ""ContactPerson"": """", ""Street"": """", ""Zip"": """", ""City"": """", ""Requirements"": [], ""Salary"": """", ""WorkTime"": """" }}
+Anzeige: {jobDescription}";
+    }
+
+private string GetDraftPrompt()
+    {
+        bool isOllama = aiConfig?.SelectedProvider == "Ollama";
+        string userData = JsonSerializer.Serialize(userProfile);
+
+        if (isOllama)
+        {
+            return $@"DU BIST EIN EXPERTE FÜR PROFESSIONELLE DEUTSCHE BEWERBUNGEN.
+AUFGABE: Erstelle ein individuelles Anschreiben für folgende Position: {extractedJobTitle} bei {extractedCompany}.
+
+DATEN DES BEWERBERS:
+{userData}
+
+ANFORDERUNGEN DER STELLE:
+{rawRequirements}
+
+STRIKTE REGELN FÜR DEN OUTPUT:
+1. Sprache: Deutsch, professionell, selbstbewusst aber höflich.
+2. Form: KEIN Briefkopf, KEIN Betreff, KEIN Datum. Starte direkt mit der Anrede.
+3. Inhalt: Beziehe dich konkret auf die Erfahrungen im Profil und matche sie mit den Anforderungen.
+4. Ende: 'Mit freundlichen Grüßen' und der Name des Bewerbers.
+5. KEINE Einleitungstexte wie 'Hier ist dein Entwurf'. Gib NUR den Brieftext aus.";
+        }
+
+        // Standard-Prompt für Gemini
+        return $@"Erstelle ein professionelles Anschreiben.
+BEWERBER DATEN: {userData}
+JOB: {extractedJobTitle} bei {extractedCompany}
+ANFORDERUNGEN: {rawRequirements}
+REGELN: Brieftext ohne Briefkopf, authentisch, Bezug auf Skills nehmen.";
+ }
+
+    private void ParseJsonResult(string jsonRaw)
+    {
+        try
+        {
+            var match = Regex.Match(jsonRaw, @"\{.*\}", RegexOptions.Singleline);
+            if (!match.Success) return;
+
+            using var doc = JsonDocument.Parse(match.Value);
+            var root = doc.RootElement;
+
+            extractedJobTitle = root.TryGetProperty("JobTitle", out var jt) ? jt.GetString() ?? "" : "";
+            extractedCompany = root.TryGetProperty("Company", out var co) ? co.GetString() ?? "" : "";
+            extractedContact = root.TryGetProperty("ContactPerson", out var cp) ? cp.GetString() ?? "" : "";
+            extractedStreet = root.TryGetProperty("Street", out var st) ? st.GetString() ?? "" : "";
+            extractedZip = root.TryGetProperty("Zip", out var zi) ? zi.GetString() ?? "" : "";
+            extractedCity = root.TryGetProperty("City", out var ci) ? ci.GetString() ?? "" : "";
+            extractedSalary = root.TryGetProperty("Salary", out var sa) ? sa.GetString() ?? "" : "";
+            extractedWorkTime = root.TryGetProperty("WorkTime", out var wt) ? wt.GetString() ?? "" : "";
+
+            if (root.TryGetProperty("Requirements", out var req) && req.ValueKind == JsonValueKind.Array)
+            {
+                rawRequirements = string.Join(", ", req.EnumerateArray().Select(x => x.GetString()));
+            }
+        }
+        catch { /* Fallback auf manuelle Eingabe */ }
+    }
+
+    private async Task ExportForGeminiWeb()
+    {
+        // Wir extrahieren die Profildaten ohne das Base64-Bild
+        var candidateData = userProfile == null ? null : new
+        {
+            userProfile.Personal.Name,
+            userProfile.Personal.Title,
+            userProfile.Personal.Email,
+            userProfile.Personal.Phone,
+            userProfile.Personal.Location,
+            userProfile.Personal.Website,
+            // ProfilePictureBase64 wird hier einfach weggelassen
+            Skills = userProfile.Skills,
+            Competences = userProfile.Competences,
+            Experiences = userProfile.Experiences,
+            EducationHistory = userProfile.EducationHistory
+        };
+
+        var exportData = new
+        {
+            Role = "Du bist ein Experte für Bewerbungsschreiben.",
+            Candidate = candidateData,
+            TargetJob = new
+            {
+                Title = extractedJobTitle,
+                Company = extractedCompany,
+                Requirements = rawRequirements,
+                DescriptionSnippet = jobDescription.Length > 500 ? jobDescription.Substring(0, 500) + "..." : jobDescription
+            },
+            Task = "Erstelle ein hochmodernes Anschreiben basierend auf den Candidate-Daten für den TargetJob."
+        };
+
+        string json = JsonSerializer.Serialize(exportData, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // Optional: Verhindert hässliches Escaping von Umlauten
+        });
+
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", json);
+        await JS.InvokeVoidAsync("alert", "JSON für Gemini (ohne Bilddaten) wurde kopiert!");
+    }
+
+    private async Task SaveAndGoToDesign()
+    {
+        if (string.IsNullOrEmpty(generatedResult)) return;
+
+        var record = new ApplicationRecord
+        {
+            JobTitle = extractedJobTitle,
+            Company = extractedCompany,
+            ContactPerson = extractedContact,
+            Street = extractedStreet,
+            ZipCode = extractedZip,
+            City = extractedCity,
+            FullAddress = $"{extractedStreet}, {extractedZip} {extractedCity}",
+            RawLetterText = generatedResult,
+            CreatedAt = DateTime.Now,
+            Status = "Entwurf",
+            SalaryInfo = extractedSalary,
+            WorkTimeModel = extractedWorkTime,
+            FullJobDescription = jobDescription,            
+            JobSummary = extractedSummary,
+            Requirements = rawRequirements.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries).ToList()
+        };
+
+        int newAppId = await DbService.SaveApplicationAsync(record);
+        Nav.NavigateTo($"/template-editor/1/{newAppId}");
+    }
+}

@@ -1,0 +1,111 @@
+.gen-container {
+    padding: 20px;
+    max-width: 1300px;
+    margin: 0 auto;
+    font-family: sans-serif;
+}
+
+.title {
+    color: #512bd4;
+    font-weight: 800;
+}
+
+.info-bar {
+    background: #eee;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+}
+
+.main-grid {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 20px;
+}
+
+textarea {
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.input-card textarea {
+    min-height: 400px;
+}
+
+.widget {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+    .widget h4 {
+        margin-top: 0;
+        color: #512bd4;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+    }
+
+.field label {
+    font-size: 0.7rem;
+    font-weight: bold;
+    color: #666;
+    display: block;
+    margin-top: 8px;
+}
+
+.widget input {
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 5px;
+}
+
+.btn-primary {
+    background: #512bd4;
+    color: white;
+    padding: 15px;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    width: 100%;
+    cursor: pointer;
+}
+
+.result-card {
+    margin-top: 30px;
+    border: 2px solid #512bd4;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.result-text {
+    min-height: 600px;
+    font-size: 1.1rem;
+    padding: 20px;
+    line-height: 1.6;
+    border: none;
+}
+
+.btn-save {
+    background: #28a745;
+    color: white;
+    padding: 15px 30px;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.error-box {
+    color: #721c24;
+    background: #f8d7da;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 20px 0;
+    border: 1px solid #f5c6cb;
+}

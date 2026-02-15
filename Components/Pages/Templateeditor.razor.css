@@ -1,0 +1,233 @@
+/* Grundlayout */
+.main-layout {
+    display: grid;
+    grid-template-columns: 850px 1fr; /* Etwas breiterer Editor */
+    height: 100vh;
+    overflow: hidden;
+    background-color: #f8fafc;
+}
+
+/* LINKER BEREICH: EDITOR */
+.editor-section {
+    overflow-y: auto;
+    background: white;
+    padding: 1.5rem;
+    box-shadow: 2px 0 15px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+}
+
+/* Header & Titel */
+h4 {
+    font-weight: 700;
+    color: #1a1a1a;
+    letter-spacing: -0.5px;
+}
+
+/* Form-Elemente */
+.form-control-sm, .form-select-sm {
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+    .form-control-sm:focus, .form-select-sm:focus {
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+
+/* Tab-Navigation */
+.nav-tabs {
+    border-bottom: 2px solid #f1f5f9;
+    gap: 5px;
+}
+
+    .nav-tabs .nav-link {
+        border: none;
+        color: #64748b;
+        font-weight: 500;
+        padding: 0.6rem 1rem;
+        border-radius: 10px 10px 0 0;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+        .nav-tabs .nav-link.active {
+            color: #8b5cf6 !important;
+            background: transparent;
+            border-bottom: 2px solid #8b5cf6;
+        }
+
+        .nav-tabs .nav-link:hover:not(.active) {
+            background-color: #f1f5f9;
+        }
+
+/* --- NEUER STABILER CODE EDITOR --- */
+.editor-box {
+    background: #1e1e2e;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Die neue Textarea-Klasse (ersetzt Prism-Overlay) */
+.modern-code-editor {
+    width: 100%;
+    height: 100%;
+    min-height: 100px;
+    background-color: #1e1e2e; /* Dunkles Theme */
+    color: #d4d4d4; /* Hellgrauer Text */
+    font-family: 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+    font-size: 0.7rem;
+    line-height: 1.6;
+    padding: 15px;
+    border: none;
+    outline: none;
+    resize: none; /* Verhindert manuelles Ziehen, da flex-grow greift */
+    tab-size: 4;
+    white-space: pre;
+    overflow: auto;
+}
+
+    .modern-code-editor:focus {
+        background-color: #232335; /* Leichter Glow beim Editieren */
+    }
+
+/* Toolbar über dem Code */
+.bg-dark.text-orange, .bg-dark.text-blue {
+    background-color: #1a1a27 !important;
+    padding: 8px 12px !important;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #2d2d3f;
+}
+
+.text-orange {
+    color: #f97316;
+}
+/* HTML */
+.text-blue {
+    color: #38bdf8;
+}
+/* CSS */
+
+/* RECHTER BEREICH: VORSCHAU */
+.preview-section {
+    display: flex;
+    flex-direction: column;
+    background-color: #cbd5e1;
+    position: relative;
+}
+
+.preview-toolbar {
+    background: white;
+    height: 50px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #1a1a1a;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+}
+
+.preview-container {
+    flex-grow: 1;
+    padding: 40px;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+/* A4 Wrapper */
+.a4-wrapper {
+    width: 210mm;
+    height: 297mm;
+    background: white;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+    border-radius: 4px;
+    transform: scale(0.85);
+    transform-origin: top center;
+    transition: transform 0.3s ease;
+}
+
+.a4-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 4px;
+}
+
+/* Buttons */
+.btn-success {
+    background-color: #8b5cf6;
+    border: none;
+    border-radius: 10px;
+    padding: 0.5rem 1.2rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+    color: white;
+}
+
+    .btn-success:hover {
+        background-color: #7c3aed;
+        transform: translateY(-1px);
+        color: white;
+    }
+
+.btn-warning.animate-pulse {
+    background-color: #f59e0b;
+    border: none;
+    border-radius: 10px;
+    color: white;
+    position: absolute;
+    top: 65px;
+    right: 25px;
+    z-index: 100;
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+    }
+
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 4px 25px rgba(245, 158, 11, 0.6);
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+    }
+}
+
+.animate-pulse {
+    animation: pulse 2s infinite ease-in-out;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }

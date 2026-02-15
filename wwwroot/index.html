@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>JobApplicator2</title>
+    <base href="/" />
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap-icons.css" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="JobApplicator2.styles.css" />
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <div class="status-bar-safe-area"></div>
+    <div id="app">Loading...</div>
+
+    <div id="blazor-error-ui" data-nosnippet>
+        An unhandled error has occurred. <a href="." class="reload">Reload</a> <span class="dismiss">🗙</span>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script>
+        var pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    </script>
+
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+
+    <script>
+        // --- PDF DRUCK FUNKTION ---
+        window.printHtmlInNewWindow = (htmlContent) => {
+            // 1. Erstelle einen versteckten Iframe
+            let iframe = document.getElementById('silent-print-iframe');
+            if (!iframe) {
+                iframe = document.createElement('iframe');
+                iframe.id = 'silent-print-iframe';
+                iframe.style.display = 'none'; // Er ist unsichtbar
+                document.body.appendChild(iframe);
+            }
+
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(htmlContent);
+            doc.close();
+
+            // 2. Sobald der Inhalt geladen ist, drucken
+            iframe.contentWindow.onload = function () {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            };
+        };
+
+        // --- EDITOR BEFEHLE (Fett, Kursiv, etc. im Iframe) ---
+        window.execIframeCmd = (id, cmd, val) => {
+            const iframe = document.getElementById(id);
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.document.execCommand(cmd, false, val);
+            }
+        };
+
+        // --- ALLGEMEINE HILFSFUNKTIONEN ---
+
+        // Fügt Text an Cursor-Position ein
+        window.insertTextAtCursor = (id, text) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const start = el.selectionStart;
+            const end = el.selectionEnd;
+            const value = el.value;
+            el.value = value.substring(0, start) + text + value.substring(end);
+            el.selectionStart = el.selectionEnd = start + text.length;
+            el.focus();
+        };
+
+        // Wert einer Textarea auslesen
+        window.getElementValue = (id) => {
+            const el = document.getElementById(id);
+            return el ? el.value : "";
+        };
+
+        // Vorschau-Iframe aktualisieren
+        window.updateIframeContent = (id, html) => {
+            const iframe = document.getElementById(id);
+            if (!iframe) return;
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(html);
+            doc.close();
+        };
+
+        // Datei-Download (HTML Export)
+        window.downloadFile = (name, type, content) => {
+            const blob = new Blob([content], { type: type });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = name;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        };
+
+        // PDF zu Bildern konvertieren
+        window.convertPdfToImages = async (streamReference) => {
+            const arrayBuffer = await streamReference.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const images = [];
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: 2.0 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                await page.render({ canvasContext: context, viewport: viewport }).promise;
+                images.push(canvas.toDataURL('image/jpeg', 0.8));
+            }
+            return images;
+        };
+    </script>
+</body>
+</html>

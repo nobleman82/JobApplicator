@@ -1,0 +1,129 @@
+/* Grund-Layout der Top-Row */
+.top-row {
+    min-height: 4.5rem;
+    background-color: transparent;
+    display: flex;
+    align-items: center;
+    padding: 0 1.5rem;
+}
+
+/* Branding (Logo) Bereich */
+.navbar-brand {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1a1a1a !important;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+}
+
+/* Der lila Punkt/Quadrat im Logo */
+.brand-dot {
+    width: 12px;
+    height: 12px;
+    background-color: #8b5cf6;
+    border-radius: 3px;
+}
+
+/* Mobile Toggler (Checkbox Hack Style) */
+.navbar-toggler {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    cursor: pointer;
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    border-radius: 8px;
+    background-color: #f1f5f9;
+    /* Hamburger Icon via SVG */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28100, 116, 139, 1%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 1.5rem;
+    border: none;
+    z-index: 10;
+}
+
+/* Nav-Items allgemein */
+.nav-item {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 4px;
+    padding: 0 1rem;
+}
+
+    /* Link Styling mit Deep-Selector für Blazor NavLink */
+    .nav-item ::deep .nav-link {
+        color: #64748b;
+        background: transparent;
+        border-radius: 12px;
+        height: 3.2rem;
+        display: flex;
+        align-items: center;
+        padding: 0 1.2rem;
+        transition: all 0.2s ease;
+        border: none;
+        text-decoration: none;
+    }
+
+/* Icon-Abstand in der Nav */
+.nav-icon {
+    font-size: 1.2rem;
+    margin-right: 0.8rem;
+    display: flex;
+    align-items: center;
+}
+
+/* AKTIV-Zustand (Violett) */
+.nav-item ::deep a.active {
+    background-color: #8b5cf6;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+}
+
+/* HOVER-Zustand (nur wenn nicht aktiv) */
+.nav-item ::deep .nav-link:not(.active):hover {
+    background-color: #f1f5f9;
+    color: #1a1a1a;
+}
+
+/* --- SPEZIAL-LOOK FÜR DEN CONTENT EDITOR LINK --- */
+.nav-item .special-editor-link {
+    background-color: rgba(139, 92, 246, 0.08) !important; /* Sehr zartes Violett */
+    border: 1px dashed #8b5cf6 !important; /* Gestrichelter Rahmen */
+    color: #8b5cf6 !important;
+    margin-top: 12px;
+    font-weight: 600;
+}
+
+    .nav-item .special-editor-link:hover {
+        background-color: #8b5cf6 !important;
+        color: white !important;
+        border-style: solid !important;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+    }
+
+/* Responsivität */
+.nav-scrollable {
+    display: none;
+}
+
+.navbar-toggler:checked ~ .nav-scrollable {
+    display: block;
+}
+
+@media (min-width: 641px) {
+    .navbar-toggler {
+        display: none;
+    }
+
+    .nav-scrollable {
+        display: block;
+        /* Verhindert Überlappen mit der Top-Row */
+        height: calc(100vh - 4.5rem);
+        overflow-y: auto;
+    }
+}

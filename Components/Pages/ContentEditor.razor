@@ -1,0 +1,315 @@
+@page "/content-editor/{AppId:int}/{TemplateId:int}"
+@using JobApplicator2.Services
+@using System.Text.Json
+@using System.Text
+@using Microsoft.AspNetCore.Components.Forms
+@inject DatabaseService DbService
+@inject ProfileService ProfService
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<div class="editor-container">
+    @if (application == null || userProfile == null)
+    {
+        <div class="p-5 text-center text-white">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2">Lade Dokumente...</p>
+        </div>
+    }
+    else
+    {
+        <div class="editor-toolbar bg-dark text-white p-2 d-flex gap-3 align-items-center flex-wrap">
+            <div class="btn-group shadow-sm">
+                <button class="btn btn-sm @(activeTab == "cover" ? "btn-primary" : "btn-outline-light")" @onclick='() => SwitchTab("cover")'>Deckblatt</button>
+                <button class="btn btn-sm @(activeTab == "letter" ? "btn-primary" : "btn-outline-light")" @onclick='() => SwitchTab("letter")'>Anschreiben</button>
+                <button class="btn btn-sm @(activeTab == "cv" ? "btn-primary" : "btn-outline-light")" @onclick='() => SwitchTab("cv")'>Lebenslauf</button>
+                <button class="btn btn-sm @(activeTab == "att" ? "btn-primary" : "btn-outline-light")" @onclick='() => SwitchTab("att")'>Anhänge</button>
+            </div>
+
+            <div class="vr bg-secondary"></div>
+
+            <div class="d-flex gap-1 bg-white rounded p-1">
+                <button class="btn btn-editor-tool" title="Fett" @onclick='() => ExecCmd("bold")'><i class="bi bi-type-bold"></i></button>
+                <button class="btn btn-editor-tool" title="Kursiv" @onclick='() => ExecCmd("italic")'><i class="bi bi-type-italic"></i></button>
+                <button class="btn btn-editor-tool" title="Unterstrichen" @onclick='() => ExecCmd("underline")'><i class="bi bi-type-underline"></i></button>
+                <div class="vr mx-1 text-dark"></div>
+                <button class="btn btn-editor-tool" title="Aufzählung" @onclick='() => ExecCmd("insertUnorderedList")'><i class="bi bi-list-ul"></i></button>
+                <div class="vr mx-1 text-dark"></div>
+                <select class="form-select form-select-sm" style="width: 130px; font-size: 0.8rem;" @onchange="ChangeFontSize">
+                    <option value="3">Größe: Normal</option>
+                    <option value="1">Sehr klein</option>
+                    <option value="2">Klein</option>
+                    <option value="4">Mittel</option>
+                    <option value="5">Groß</option>
+                    <option value="6">Sehr groß</option>
+                </select>
+            </div>
+
+            <div class="ms-auto d-flex gap-2">
+                <div class="d-flex align-items-center bg-secondary px-2 rounded small border border-light border-opacity-25">
+                    <span class="me-2 fw-bold text-white">Druck:</span>
+                    <label class="mb-0 me-2 small text-white"><input type="checkbox" @bind="printCover"> Deckbl.</label>
+                    <label class="mb-0 me-2 small text-white"><input type="checkbox" @bind="printLetter"> Anschr.</label>
+                    <label class="mb-0 me-2 small text-white"><input type="checkbox" @bind="printCv"> CV</label>
+                    <label class="mb-0 small text-white"><input type="checkbox" @bind="printAtt"> Anhänge</label>
+                </div>
+                <button class="btn btn-sm btn-info text-white" @onclick="ExportAsHtml"><i class="bi bi-filetype-html"></i> HTML</button>
+                <button class="btn btn-sm btn-danger" @onclick="PrintPdf"><i class="bi bi-printer"></i> PDF</button>
+                <button class="btn btn-sm btn-success" @onclick="SaveFinalVersion">💾 Speichern</button>
+            </div>
+        </div>
+
+        <div class="editor-main">
+            <div class="preview-panel">
+                <div class="a4-container shadow-lg">
+                    <iframe id="editor-iframe" class="preview-iframe"></iframe>
+                </div>
+            </div>
+
+            <div class="code-panel p-3 border-start">
+                <h6 class="text-uppercase small fw-bold text-muted mb-2">HTML Quellcode (@activeTab)</h6>
+                <textarea class="form-control code-area mb-3" @bind="ActiveHtmlValue" @bind:event="oninput" @onkeyup="UpdatePreview"></textarea>
+
+                <h6 class="text-uppercase small fw-bold text-muted mb-2">Custom CSS (Global)</h6>
+                <textarea class="form-control css-area mb-3" @bind="customCss" @bind:event="oninput" @onkeyup="UpdatePreview"></textarea>
+
+                @if (activeTab == "att")
+                {
+                    <div class="p-2 border rounded bg-white">
+                        <label class="small fw-bold d-block mb-1">Anhänge (PDF/Bilder):</label>
+                        <InputFile OnChange="HandlePdfUpload" class="form-control form-control-sm" multiple />
+                        <button class="btn btn-xs btn-outline-danger mt-2 w-100" @onclick='() => { htmlAttachments = ""; UpdatePreview(); }'>Alle Anhänge entfernen</button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+
+
+@code {
+    [Parameter] public int AppId { get; set; }
+    [Parameter] public int TemplateId { get; set; }
+
+    private ApplicationRecord? application;
+    private ResumeData? userProfile;
+    private HtmlTemplate? template;
+
+    private string htmlCover = "";
+    private string htmlLetter = "";
+    private string htmlCv = "";
+    private string htmlAttachments = "";
+    private string customCss = "";
+    private string activeTab = "letter";
+
+    private bool printCover = true;
+    private bool printLetter = true;
+    private bool printCv = true;
+    private bool printAtt = true;
+
+
+    // Init Funktionen
+    protected override async Task OnInitializedAsync()
+    {
+        application = await DbService.GetApplicationAsync(AppId);
+        userProfile = await ProfService.LoadProfileAsync();
+        var template = await DbService.GetTemplateAsync(TemplateId);
+
+        if (application != null)
+        {
+            // Falls noch nie generiert wurde ODER wir erzwingen wollen,
+            // dass das aktuelle Template-CSS übernommen wird:
+            if (string.IsNullOrEmpty(application.HtmlLetter))
+            {
+                application.HtmlCover = TemplateEngine.Render(template?.HtmlDeckblatt, userProfile, application);
+                application.HtmlLetter = TemplateEngine.Render(template?.HtmlAnschreiben, userProfile, application);
+                application.HtmlResume = TemplateEngine.Render(template?.HtmlLebenslauf, userProfile, application);
+                application.AppliedCss = template?.CustomCss;
+
+                await DbService.SaveApplicationAsync(application);
+            }
+
+            // Lokale Variablen für den Editor befüllen
+            htmlCover = application.HtmlCover;
+            htmlLetter = application.HtmlLetter;
+            htmlCv = application.HtmlResume;
+            htmlAttachments = application.HtmlAttachments ?? "";
+
+            // WICHTIG: Wir nutzen das gespeicherte CSS der Bewerbung,
+            // nicht das (vielleicht geänderte) CSS des Templates!
+            customCss = application.AppliedCss ?? template?.CustomCss ?? "";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await UpdatePreview();
+    }
+
+    //Umschalten des sichtbaren HTML Codes
+    private string ActiveHtmlValue
+    {
+        get => activeTab switch
+        {
+            "cover" => htmlCover,
+            "letter" => htmlLetter,
+            "cv" => htmlCv,
+            "att" => htmlAttachments,
+            _ => ""
+        };
+        set
+        {
+            if (activeTab == "cover") htmlCover = value;
+            else if (activeTab == "letter") htmlLetter = value;
+            else if (activeTab == "cv") htmlCv = value;
+            else if (activeTab == "att") htmlAttachments = value;
+        }
+    } 
+
+    private async Task SwitchTab(string tab)
+    {
+        await SyncFromIframe();
+        activeTab = tab;
+        await UpdatePreview();
+    }
+
+    // Aktualisiert den Iframe Inhalt basierend auf der aktuell aktiven HTML Variable
+    private async Task UpdatePreview()
+    {
+        string content = ActiveHtmlValue;
+        var fullHtml = $@"<!DOCTYPE html><html><head>
+            <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css'>
+            <style>
+                * {{ box-sizing: border-box; -webkit-print-color-adjust: exact; }}
+                body {{ margin: 0; padding: 0; background: white; font-family: sans-serif; overflow-x: hidden; }}
+                {customCss}
+                .page-preview {{ width: 210mm; min-height: 297mm; position: relative; padding: 0; margin: 0; }}
+                .att-page img {{ max-width: 100%; height: auto; display: block; }}
+            </style></head>
+            <body contenteditable='true' id='editable-body'>
+                <div class='page-preview'>{content}</div>
+            </body></html>";
+        await JS.InvokeVoidAsync("updateIframeContent", "editor-iframe", fullHtml);
+    }
+
+    // Synchronisiert den HTML Code aus dem Iframe zurück in die
+    private async Task SyncFromIframe()
+    {
+        try
+        {
+            var content = await JS.InvokeAsync<string>("eval", "document.getElementById('editor-iframe').contentWindow.document.getElementById('editable-body').innerHTML");
+            string search = "<div class=\"page-preview\">";
+            if (content.Contains(search))
+            {
+                int start = content.IndexOf(search) + search.Length;
+                int end = content.LastIndexOf("</div>");
+                if (end > start) content = content.Substring(start, end - start);
+            }
+            ActiveHtmlValue = content;
+        }
+        catch { }
+    }
+
+    //HTML Export 
+    private async Task ExportAsHtml()
+    {
+        await SyncFromIframe();
+        await JS.InvokeVoidAsync("downloadFile", $"Bewerbung_{application?.Company}.html", "text/html", BuildFinalHtml());
+    }
+    private string BuildFinalHtml()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<!DOCTYPE html><html><head><meta charset='utf-8'>");
+        sb.AppendLine("<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css'>");
+        sb.AppendLine("<style>");
+        sb.AppendLine("html, body { margin: 0; padding: 0; background: #525659; }");
+        sb.AppendLine("* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }");
+        sb.AppendLine(".page { background: white; width: 210mm; height: 297mm; margin: 0 auto; position: relative; page-break-after: always; overflow: hidden; }");
+        sb.AppendLine(".att-page { background: white; width: 210mm; height: 297mm; margin: 0 auto; display: flex; align-items: center; justify-content: center; page-break-after: always; }");
+        sb.AppendLine(".att-page img { max-width: 100%; max-height: 100%; object-fit: contain; }");
+        sb.AppendLine(customCss);
+        sb.AppendLine("@media print { body, html { background: white !important; margin: 0 !important; } @page { size: A4; margin: 0; } .page, .att-page { margin: 0 !important; box-shadow: none !important; } }");
+        sb.AppendLine("</style></head><body>");
+
+        if (printCover) sb.AppendLine($"<div class='page'>{htmlCover}</div>");
+        if (printLetter) sb.AppendLine($"<div class='page'>{htmlLetter}</div>");
+        if (printCv) sb.AppendLine($"<div class='page'>{htmlCv}</div>");
+        if (printAtt && !string.IsNullOrEmpty(htmlAttachments)) sb.AppendLine(htmlAttachments);
+
+        sb.AppendLine("</body></html>");
+        return sb.ToString();
+    }
+
+    //PDF Drucken
+    private async Task PrintPdf()
+    {
+        await SyncFromIframe();
+        await JS.InvokeVoidAsync("printHtmlInNewWindow", BuildFinalHtml());
+    }
+
+    
+    //Save in Database
+    private async Task SaveFinalVersion()
+    {
+        await SyncFromIframe();
+        if (application != null)
+        {
+            application.HtmlCover = htmlCover;
+            application.HtmlLetter = htmlLetter;
+            application.HtmlResume = htmlCv;
+            application.HtmlAttachments = htmlAttachments;
+            await DbService.SaveApplicationAsync(application);
+            await JS.InvokeVoidAsync("alert", "Alle Änderungen wurden gespeichert!");
+        }
+    }
+
+
+    //Angänge Upload (PDF/Bilder)
+    private async Task HandlePdfUpload(InputFileChangeEventArgs e)
+    {
+        foreach (var file in e.GetMultipleFiles())
+        {
+            try
+            {
+                // Wenn es ein Bild ist (JPG/PNG)
+                if (file.ContentType.StartsWith("image/"))
+                {
+                    var buffer = new byte[file.Size];
+                    using var stream = file.OpenReadStream(20 * 1024 * 1024);
+                    await stream.ReadAsync(buffer);
+                    htmlAttachments += $"<div class='att-page'><img src='data:{file.ContentType};base64,{Convert.ToBase64String(buffer)}' /></div>";
+                }
+                // Wenn es ein PDF ist
+                else if (file.ContentType == "application/pdf")
+                {
+                    // Wir lesen das PDF als Stream und geben es an JS weiter
+                    using var stream = file.OpenReadStream(20 * 1024 * 1024);
+                    using var dotnetStream = new DotNetStreamReference(stream);
+                    
+                    // Aufruf der JS Funktion in index.html, die PDF-Seiten als Bild-Array liefert
+                    var images = await JS.InvokeAsync<List<string>>("convertPdfToImages", dotnetStream);
+                    
+                    foreach (var base64Img in images)
+                    {
+                        htmlAttachments += $"<div class='att-page'><img src='{base64Img}' /></div>";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Upload Fehler: " + ex.Message);
+            }
+        }
+        await UpdatePreview();
+    }
+
+    // Editor Befehle (Fett, Kursiv, etc.)
+    private async Task ExecCmd(string cmd, string? val = null)
+    {
+        await JS.InvokeVoidAsync("execIframeCmd", "editor-iframe", cmd, val);
+        await SyncFromIframe();
+    }
+
+    private async Task ChangeFontSize(ChangeEventArgs e) => await ExecCmd("fontSize", e.Value?.ToString());
+}

@@ -1,0 +1,281 @@
+﻿@page "/"
+@using JobApplicator2.Services
+@using System.Globalization
+@inject DatabaseService DbService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold m-0">Karriere Dashboard</h2>
+        <button class="btn btn-primary shadow-sm" @onclick='() => Nav.NavigateTo("/generator")'>
+            <i class="bi bi-plus-lg"></i> Neue Bewerbung
+        </button>
+    </div>
+
+    @* GANTT CHART BEREICH *@
+    @{
+        int daysToDisplay = 60;
+        var startDate = DateTime.Now.AddDays(-daysToDisplay);
+        var now = DateTime.Now;
+        var sortedApps = applications?.Where(a => a.CreatedAt > startDate).OrderByDescending(a => a.CreatedAt).ToList() ?? new();
+
+        // Dynamische Höhe: Pro Zeile 35px, mindestens aber 12 Zeilen Platz (ca. 420px)
+        int rowHeight = 35;
+        int totalGanttHeight = Math.Max(sortedApps.Count * rowHeight, 12 * rowHeight);
+    }
+
+    <div class="gantt-container shadow-sm mb-4 p-3 bg-white rounded border">
+        <h6 class="fw-bold mb-3"><i class="bi bi-calendar3"></i> Bewerbungs-Timeline (Letzte 60 Tage)</h6>
+
+        @* Äußerer Scroll-Container *@
+        <div class="gantt-scroll-area" style="max-height: 450px; overflow-y: auto; border-radius: 8px; background: #f8f9fa; border: 1px solid #eee;">
+
+            <div class="gantt-wrapper position-relative" style="height: @(totalGanttHeight)px; min-width: 600px; padding: 10px;">
+
+                @* Vertikale Hilfslinien (Zeitmarken) *@
+                <div class="position-absolute w-100 h-100 d-flex justify-content-between top-0 left-0" style="z-index: 0; pointer-events: none;">
+                    @for (int i = 0; i <= 10; i++)
+                    {
+                        <div style="border-left: 1px dashed #dee2e6; height: 100%;"></div>
+                    }
+                </div>
+
+                @if (!sortedApps.Any())
+                {
+                    <div class="text-center py-5 position-relative" style="z-index: 1;">
+                        <p class="text-muted small">Keine Aktivitäten im gewählten Zeitraum.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="position-relative" style="height: 100%; z-index: 1;">
+                        @for (int i = 0; i < sortedApps.Count; i++)
+                        {
+                            var app = sortedApps[i];
+                            var topPos = i * rowHeight + 5;
+                            double totalSec = (now - startDate).TotalSeconds;
+
+                            // Zeitberechnung
+                            var p1Start = (app.CreatedAt - startDate).TotalSeconds;
+                            var p1End = ((app.AppliedAt ?? now) - startDate).TotalSeconds;
+                            var p1Left = (p1Start / totalSec) * 100;
+                            var p1Width = ((p1End - p1Start) / totalSec) * 100;
+
+                            @* Hintergrund-Zeile für bessere Lesbarkeit *@
+                            <div style="position: absolute; top: @(topPos - 5)px; left: 0; width: 100%; height: @(rowHeight)px; background: @(i % 2 == 0 ? "rgba(0,0,0,0.02)" : "transparent");"></div>
+
+                            @* Label: Firma *@
+                            <div style="position: absolute; left: 0; top: @(topPos)px; font-size: 0.7rem; font-weight: bold; color: #444; z-index: 2; background: rgba(248,249,250,0.8); padding-right: 5px;">
+                                @app.Company
+                            </div>
+
+                            @* PHASE 1: ENTWURF *@
+                            <div class="gantt-segment shadow-sm"
+                                 style="position: absolute; left: @p1Left.ToString("F2", CultureInfo.InvariantCulture)%; top: @(topPos + 12)px; width: @Math.Max(0.5, p1Width).ToString("F2", CultureInfo.InvariantCulture)%; height: 10px; background: #64748b; border-radius: 5px 0 0 5px;"
+                                 title="Entwurf: @app.Company">
+                            </div>
+
+                            @* PHASE 2: VERSENDET *@
+                            if (app.AppliedAt.HasValue)
+                            {
+                                var p2Start = (app.AppliedAt.Value - startDate).TotalSeconds;
+                                var p2End = ((app.StatusChangedAt ?? now) - startDate).TotalSeconds;
+                                var p2Left = (p2Start / totalSec) * 100;
+                                var p2Width = ((p2End - p2Start) / totalSec) * 100;
+                                var hasFinalStatus = app.Status == "Abgesagt" || app.Status == "Zusage";
+
+                                <div class="gantt-segment shadow-sm"
+                                     style="position: absolute; left: @p2Left.ToString("F2", CultureInfo.InvariantCulture)%; top: @(topPos + 12)px; width: @Math.Max(0.5, p2Width).ToString("F2", CultureInfo.InvariantCulture)%; height: 10px; background: #3b82f6; @(hasFinalStatus ? "" : "border-radius: 0 5px 5px 0;")"
+                                     title="Warten: @app.Company">
+                                </div>
+                            }
+
+                            @* PHASE 3: ENTSCHEIDUNG *@
+                            if (app.StatusChangedAt.HasValue && (app.Status == "Abgesagt" || app.Status == "Zusage"))
+                            {
+                                var p3Start = (app.StatusChangedAt.Value - startDate).TotalSeconds;
+                                var p3Left = (p3Start / totalSec) * 100;
+                                var color = app.Status == "Zusage" ? "#8b5cf6" : "#ef4444";
+
+                                <div class="gantt-segment shadow-sm"
+                                     style="position: absolute; left: @p3Left.ToString("F2", CultureInfo.InvariantCulture)%; top: @(topPos + 12)px; width: 1.5%; min-width: 8px; height: 10px; background: @color; border-radius: 0 5px 5px 0;"
+                                     title="@app.Status: @app.Company">
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Zeit-Achsen Label *@
+        <div class="d-flex justify-content-between mt-2 text-muted small border-top pt-1" style="font-size: 0.7rem;">
+            <span>vor 60 Tagen</span>
+            <span>vor 30 Tagen</span>
+            <span>Heute</span>
+        </div>
+    </div>
+
+    @* STATISTIK KARTEN *@
+    <div class="row mb-4">
+        @foreach (var stat in new[] { ("Entwurf", "#64748b"), ("Versendet", "#3b82f6"), ("Abgesagt", "#ef4444"), ("Zusage", "#8b5cf6") })
+        {
+            <div class="col-md-3 col-sm-6 mb-2">
+                <div class="stat-card text-center p-3 border rounded bg-white shadow-sm">
+                    <div class="h4 fw-bold" style="color: @stat.Item2;">@applications?.Count(a => a.Status == stat.Item1)</div>
+                    <div class="small fw-bold text-muted text-uppercase">@stat.Item1</div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @* TABELLE DER BEWERBUNGEN *@
+    <div class="bg-white rounded shadow-sm overflow-hidden border">
+        <div class="table-responsive">
+            <table class="table table-hover m-0 align-middle">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4" style="width: 140px;">Erstellt</th>
+                        <th>Firma & Job</th>
+                        <th class="d-none d-lg-table-cell">KI-Zusammenfassung</th>
+                        <th style="width: 160px;">Status</th>
+                        <th style="width: 140px;">Versendet</th>
+                        <th style="width: 140px;">Entscheidung</th>
+                        <th style="width: 50px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (applications != null)
+                    {
+                        @foreach (var app in applications.OrderByDescending(a => a.CreatedAt))
+                        {
+                            <tr class="job-row">
+                                <td class="ps-4">
+                                    <input type="date" class="form-control form-control-sm border-0 bg-light"
+                                           value='@(app.CreatedAt.ToString("yyyy-MM-dd"))'
+                                           @onchange="@(async (e) => await UpdateCreatedDate(app, e.Value?.ToString()))" />
+                                </td>
+                                <td @ondblclick="() => OpenApplication(app.Id)" style="cursor: pointer;">
+                                    <div class="fw-bold text-primary">@app.JobTitle</div>
+                                    <div class="text-muted small">@app.Company</div>
+                                </td>
+                                <td class="d-none d-lg-table-cell">
+                                    <div class="description-preview text-dark"
+                                         style="font-size: 0.8rem; line-height: 1.2; max-height: 2.4em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                                        @app.JobSummary
+                                    </div>
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm"
+                                            style="border-left: 4px solid @GetStatusColor(app.Status)"
+                                            value="@app.Status"
+                                            @onchange="@(async (e) => await UpdateStatus(app, e.Value?.ToString()))">
+                                        <option value="Entwurf">Entwurf</option>
+                                        <option value="Versendet">Versendet</option>
+                                        <option value="Abgesagt">Abgesagt</option>
+                                        <option value="Zusage">Zusage</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="date" class="form-control form-control-sm border-0 bg-light"
+                                           value='@(app.AppliedAt?.ToString("yyyy-MM-dd"))'
+                                           @onchange="@(async (e) => await UpdateAppliedDate(app, e.Value?.ToString()))" />
+                                </td>
+                                <td>
+                                    @if (app.Status == "Abgesagt" || app.Status == "Zusage")
+                                    {
+                                        <input type="date" class="form-control form-control-sm border-0 bg-warning bg-opacity-10"
+                                               value='@(app.StatusChangedAt?.ToString("yyyy-MM-dd"))'
+                                               @onchange="@(async (e) => await UpdateStatusChangedDate(app, e.Value?.ToString()))" />
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small ps-2">-</span>
+                                    }
+                                </td>
+                                <td class="pe-3 text-end">
+                                    <button class="btn btn-outline-danger btn-sm border-0" @onclick="() => ConfirmDelete(app.Id, app.Company)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ApplicationRecord>? applications;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+    private async Task LoadData() => applications = await DbService.GetApplicationsAsync();
+
+    private async Task UpdateStatus(ApplicationRecord app, string? newStatus)
+    {
+        if (string.IsNullOrEmpty(newStatus)) return;
+        app.Status = newStatus;
+
+        if (newStatus == "Versendet" && app.AppliedAt == null)
+            app.AppliedAt = DateTime.Now;
+
+        if ((newStatus == "Abgesagt" || newStatus == "Zusage") && app.StatusChangedAt == null)
+            app.StatusChangedAt = DateTime.Now;
+
+        if (newStatus == "Entwurf")
+        {
+            app.AppliedAt = null;
+            app.StatusChangedAt = null;
+        }
+
+        await DbService.SaveApplicationAsync(app);
+        await LoadData();
+    }
+
+    private async Task UpdateCreatedDate(ApplicationRecord app, string? dateStr)
+    {
+        if (DateTime.TryParse(dateStr, out var date))
+        {
+            app.CreatedAt = date;
+            await DbService.SaveApplicationAsync(app);
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdateAppliedDate(ApplicationRecord app, string? dateStr)
+    {
+        app.AppliedAt = DateTime.TryParse(dateStr, out var date) ? date : null;
+        await DbService.SaveApplicationAsync(app);
+        StateHasChanged();
+    }
+
+    private async Task UpdateStatusChangedDate(ApplicationRecord app, string? dateStr)
+    {
+        app.StatusChangedAt = DateTime.TryParse(dateStr, out var date) ? date : null;
+        await DbService.SaveApplicationAsync(app);
+        StateHasChanged();
+    }
+
+    private void OpenApplication(int id) => Nav.NavigateTo($"/expert-editor/{id}");
+
+    private async Task ConfirmDelete(int id, string company)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", $"Bewerbung bei {company} löschen?"))
+        {
+            await DbService.DeleteApplicationAsync(id);
+            await LoadData();
+        }
+    }
+
+    private string GetStatusColor(string status) => status switch
+    {
+        "Entwurf" => "#64748b",
+        "Versendet" => "#3b82f6",
+        "Abgesagt" => "#ef4444",
+        "Zusage" => "#8b5cf6",
+        _ => "#e2e8f0"
+    };
+}

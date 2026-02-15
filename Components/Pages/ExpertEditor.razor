@@ -1,0 +1,282 @@
+@page "/expert-editor"
+@page "/expert-editor/{Id:int}"
+@using JobApplicator2.Services
+@inject DatabaseService DbService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm border">
+        <h2 class="fw-bold m-0"><i class="bi bi-cpu text-primary"></i> Experten-Datenpflege</h2>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick='() => Nav.NavigateTo("/")'>
+                <i class="bi bi-house"></i> Dashboard
+            </button>
+            <button class="btn btn-primary shadow" @onclick="SaveRecord">
+                <i class="bi bi-save"></i> Datensatz speichern
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        @* LINKER BEREICH: AUSWAHL-LISTE *@
+        <div class="col-lg-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">Bewerbungen</span>
+                    <button class="btn btn-sm btn-outline-light" @onclick="CreateNew">Neu</button>
+                </div>
+                <div class="list-group list-group-flush overflow-auto" style="max-height: 80vh;">
+                    @if (allRecords != null)
+                    {
+                        @foreach (var rec in allRecords.OrderByDescending(a => a.CreatedAt))
+                        {
+                            <button class="list-group-item list-group-item-action @(rec.Id == Id ? "active border-primary bg-primary-subtle text-dark" : "")"
+                                    @onclick="() => SelectRecord(rec.Id)">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <small class="text-muted">@rec.CreatedAt.ToShortDateString()</small>
+                                    <span class="badge rounded-pill @GetBadgeClass(rec.Status)">@rec.Status</span>
+                                </div>
+                                <div class="fw-bold text-truncate">@rec.Company</div>
+                                <div class="small text-truncate">@rec.JobTitle</div>
+                            </button>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* MITTLERER/RECHTER BEREICH: EDITOR *@
+        <div class="col-lg-9">
+            @if (Model == null)
+            {
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">Lade Daten...</p>
+                </div>
+            }
+            else
+            {
+                <div class="row g-3">
+                    @* BASISDATEN *@
+                    <div class="col-lg-8">
+                        <div class="card shadow-sm mb-3">
+                            <div class="card-header bg-dark text-white fw-bold">Basis-Informationen (ID: @(Model.Id == 0 ? "Neu" : Model.Id))</div>
+                            <div class="card-body row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-uppercase">Unternehmen</label>
+                                    <input @bind="Model.Company" class="form-control" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-uppercase">Job Titel</label>
+                                    <input @bind="Model.JobTitle" class="form-control" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small">Status</label>
+                                    <select @bind="Model.Status" class="form-select border-primary shadow-sm">
+                                        <option value="Entwurf">Entwurf</option>
+                                        <option value="Versendet">Versendet</option>
+                                        <option value="Abgesagt">Abgesagt</option>
+                                        <option value="Zusage">Zusage</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small">Gehalt/Info</label>
+                                    <input @bind="Model.SalaryInfo" class="form-control" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small">Arbeitszeitmodell</label>
+                                    <input @bind="Model.WorkTimeModel" class="form-control" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm mb-3">
+                            <div class="card-header bg-secondary text-white fw-bold">Anforderungen & Benefits (Listen)</div>
+                            <div class="card-body row">
+                                <div class="col-md-6 border-end">
+                                    <label class="form-label fw-bold small">Requirements (Eins pro Zeile)</label>
+                                    <textarea class="form-control" rows="4"
+                                              value="@string.Join("\n", Model.Requirements)"
+                                              @onchange="@(e => Model.Requirements = e.Value.ToString().Split('\n').ToList())"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Benefits (Eins pro Zeile)</label>
+                                    <textarea class="form-control" rows="4"
+                                              value="@string.Join("\n", Model.Benefits)"
+                                              @onchange="@(e => Model.Benefits = e.Value.ToString().Split('\n').ToList())"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm mb-3">
+                            <div class="card-header bg-light fw-bold">KI-Texte & Summary</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold small text-primary">Job Summary (Dashboard)</label>
+                                    <textarea @bind="Model.JobSummary" class="form-control" rows="2"></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small">Raw Letter Text (KI Reintext)</label>
+                                    <textarea @bind="Model.RawLetterText" class="form-control" rows="4"></textarea>
+                                </div>
+                                <div class="mb-0">
+                                    <label class="form-label small">Vollständige Jobbeschreibung</label>
+                                    <textarea @bind="Model.FullJobDescription" class="form-control" rows="6"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* RECHTE SPALTE: DATEN & KONTAKT *@
+                    <div class="col-lg-4">
+                        <div class="card shadow-sm mb-3 border-warning">
+                            <div class="card-header bg-warning fw-bold">Timeline</div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <label class="form-label small">Erstellt am</label>
+                                    <input type="date" value="@Model.CreatedAt.ToString("yyyy-MM-dd")"
+                                           @onchange="@(e => Model.CreatedAt = DateTime.Parse(e.Value.ToString()))" class="form-control form-control-sm" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small">Versendet am</label>
+                                    <input type="date" value="@Model.AppliedAt?.ToString("yyyy-MM-dd")"
+                                           @onchange="@(e => Model.AppliedAt = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" class="form-control form-control-sm" />
+                                </div>
+                                <div class="mb-0">
+                                    <label class="form-label small text-danger">Status-Änderung am</label>
+                                    <input type="date" value="@Model.StatusChangedAt?.ToString("yyyy-MM-dd")"
+                                           @onchange="@(e => Model.StatusChangedAt = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" class="form-control form-control-sm" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm mb-3">
+                            <div class="card-header bg-light fw-bold small">Adresse & Kontakt</div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <label class="form-label small">Ansprechpartner</label>
+                                    <input @bind="Model.ContactPerson" class="form-control form-control-sm" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small">Straße / Hausnr.</label>
+                                    <input @bind="Model.Street" class="form-control form-control-sm" />
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-4">
+                                        <label class="form-label small">PLZ</label>
+                                        <input @bind="Model.ZipCode" class="form-control form-control-sm" />
+                                    </div>
+                                    <div class="col-8">
+                                        <label class="form-label small">Ort</label>
+                                        <input @bind="Model.City" class="form-control form-control-sm" />
+                                    </div>
+                                </div>
+                                <div class="mb-0 border-top pt-2 mt-2">
+                                    <label class="form-label small">Vollständige Adresse (formatiert)</label>
+                                    <textarea @bind="Model.FullAddress" class="form-control form-control-sm" rows="3" placeholder="Wird normalerweise automatisch aus den obigen Feldern generiert..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* HTML-OUTPUT-BEREICH (VOLLSTÄNDIG) *@
+                    <div class="col-12">
+                        <div class="card shadow-sm border-danger mb-5">
+                            <div class="card-header bg-danger text-white fw-bold">HTML-Output & Styling (Experten-Bereich)</div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold text-danger small">HTML Anschreiben (HtmlLetter)</label>
+                                        <textarea @bind="Model.HtmlLetter" class="form-control font-monospace small" rows="8" style="font-size: 0.8rem;"></textarea>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold text-danger small">HTML Lebenslauf (HtmlResume)</label>
+                                        <textarea @bind="Model.HtmlResume" class="form-control font-monospace small" rows="8" style="font-size: 0.8rem;"></textarea>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold small text-dark">HTML Deckblatt (HtmlCover)</label>
+                                        <textarea @bind="Model.HtmlCover" class="form-control font-monospace small" rows="5" style="font-size: 0.8rem;"></textarea>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold small text-dark">Anhänge-Info (HtmlAttachments)</label>
+                                        <textarea @bind="Model.HtmlAttachments" class="form-control font-monospace small" rows="5" style="font-size: 0.8rem;"></textarea>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold small text-dark">Angewendetes CSS (AppliedCss)</label>
+                                        <textarea @bind="Model.AppliedCss" class="form-control font-monospace small" rows="5" style="font-size: 0.8rem;"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    private ApplicationRecord? Model { get; set; }
+    private List<ApplicationRecord>? allRecords;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        allRecords = await DbService.GetApplicationsAsync();
+
+        if (Id.HasValue)
+        {
+            Model = allRecords.FirstOrDefault(r => r.Id == Id.Value);
+            if (Model == null) Nav.NavigateTo("/expert-editor");
+        }
+        else
+        {
+            Model = new ApplicationRecord();
+        }
+    }
+
+    private void SelectRecord(int id)
+    {
+        Nav.NavigateTo($"/expert-editor/{id}");
+    }
+
+    private void CreateNew()
+    {
+        Nav.NavigateTo("/expert-editor");
+        Model = new ApplicationRecord();
+        StateHasChanged();
+    }
+
+    private async Task SaveRecord()
+    {
+        if (string.IsNullOrWhiteSpace(Model?.Company) || string.IsNullOrWhiteSpace(Model?.JobTitle))
+        {
+            await JS.InvokeVoidAsync("alert", "Bitte mindestens Unternehmen und Job-Titel ausfüllen!");
+            return;
+        }
+
+        await DbService.SaveApplicationAsync(Model);
+        await LoadData();
+        await JS.InvokeVoidAsync("alert", "Datensatz erfolgreich gespeichert!");
+
+        // Wenn es ein neuer Datensatz war, haben wir jetzt eine ID vom Service erhalten
+        if (Id == null && Model.Id != 0)
+        {
+            Nav.NavigateTo($"/expert-editor/{Model.Id}");
+        }
+    }
+
+    private string GetBadgeClass(string status) => status switch
+    {
+        "Versendet" => "bg-primary",
+        "Zusage" => "bg-success",
+        "Abgesagt" => "bg-danger",
+        _ => "bg-secondary text-white"
+    };
+}
