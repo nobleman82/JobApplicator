@@ -52,7 +52,7 @@ JobApplicator ist eine leistungsstarke **Blazor WebAssembly** Anwendung zur Verw
 
 ## 📄 Lizenz
 
-Dieses Projekt ist für den persönlichen Gebrauch bestimmt. 
+Lizenz: Dieses Projekt steht unter der MIT-Lizenz (siehe LICENSE).
 
 ---
 *Erstellt von [nobleman82](https://github.com/nobleman82)*
