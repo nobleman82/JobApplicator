@@ -142,7 +142,9 @@ namespace JobApplicator2.Services
         public DbSet<ApplicationRecord> Applications { get; set; }
         public DbSet<AiConfig> AiSettings { get; set; }
         public DbSet<HtmlTemplate> Templates { get; set; }
-
+        public DbSet<Skill> Skills { get; set; }
+    public DbSet<Experience> Experiences { get; set; }
+    public DbSet<Education> EducationHistory { get; set; }
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -181,8 +183,8 @@ namespace JobApplicator2.Services
             // --- 1. Persönliche Daten ---
             var p = profile?.Personal;
             string photoHtml = !string.IsNullOrEmpty(p?.ProfilePictureBase64)
-                ? $"<img src='{p.ProfilePictureBase64}' class='profile-photo' style='max-width:150px;' />"
-                : "";
+                  ? p.ProfilePictureBase64
+                  : "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
             html = html
                 .Replace("{{Name}}", p?.Name ?? "Name")
@@ -197,6 +199,7 @@ namespace JobApplicator2.Services
             html = html
                 .Replace("{{JobTitle}}", app?.JobTitle ?? "Position")
                 .Replace("{{Company}}", app?.Company ?? "Firma")
+                .Replace("{{ContactPerson}}", app?.ContactPerson ?? "ContactPerson")
                 .Replace("{{Street}}", app?.Street ?? "Straße")
                 .Replace("{{ZipCode}}", app?.ZipCode ?? "PLZ")
                 .Replace("{{City}}", app?.City ?? "Stadt")
@@ -207,35 +210,92 @@ namespace JobApplicator2.Services
 
             // Berufserfahrung
             var expHtml = new StringBuilder();
+
             if (profile?.Experiences != null && profile.Experiences.Any())
             {
                 foreach (var exp in profile.Experiences)
                 {
-                    expHtml.Append($"<div class='experience-item'><strong>{exp.Role}</strong> bei {exp.Company} ({exp.Period})<br/>{exp.Description}</div>");
+                    expHtml.Append($@"
+        <div class='exp-item mb-3'>
+            <div class='d-flex justify-content-between'>
+                <strong contenteditable='true'>{exp.Role}</strong>
+                <span class='text-muted' contenteditable='true'>{exp.Period}</span>
+            </div>
+            <div contenteditable='true'>{exp.Company}</div>
+            <small class='text-secondary' contenteditable='true'>
+                {exp.Description}
+            </small>
+        </div>");
                 }
             }
-            else { expHtml.Append("Keine Berufserfahrung hinterlegt."); }
+            else
+            {
+                expHtml.Append("<div class='text-muted'>Keine Berufserfahrung hinterlegt.</div>");
+            }
+
             html = html.Replace("{{CV_Experience}}", expHtml.ToString());
 
             // Ausbildung
             var eduHtml = new StringBuilder();
+
             if (profile?.EducationHistory != null && profile.EducationHistory.Any())
             {
-                foreach (var edu in profile.EducationHistory)
+                // HIER NEU: Sortierung nach dem String 'Period' 
+                // Wir nehmen die letzten 4 Zeichen (meistens das Endjahr) für eine einfache Sortierung
+                var sortedEducation = profile.EducationHistory
+                    .OrderByDescending(e => e.Period.Length >= 4 ? e.Period.Substring(e.Period.Length - 4) : e.Period)
+                    .ToList();
+
+                foreach (var edu in sortedEducation) // Nutze hier die sortierte Liste
                 {
-                    eduHtml.Append($"<div class='education-item'><strong>{edu.Degree}</strong> - {edu.School} ({edu.Period})<br/>{edu.Notes}</div>");
+                    eduHtml.Append($@"
+            <div class='edu-item mb-3'>
+                <div class='d-flex justify-content-between'>
+                    <strong contenteditable='true'>{edu.School}</strong>
+                    <span class='text-muted' contenteditable='true'>{edu.Period}</span>
+                </div>
+                <div contenteditable='true'>{edu.Degree}</div>
+                {(string.IsNullOrEmpty(edu.Notes) ? "" : $"<small class='text-secondary' contenteditable='true'>{edu.Notes}</small>")}
+            </div>");
                 }
             }
-            else { eduHtml.Append("Keine Ausbildung hinterlegt."); }
+            else
+            {
+                eduHtml.Append("<div class='text-muted'>Keine Ausbildung hinterlegt.</div>");
+            }
+
             html = html.Replace("{{CV_Education}}", eduHtml.ToString());
 
             // Skills
-            var skillsHtml = string.Join(", ", profile?.Skills?.Select(s => $"{s.Name} ({s.Level})") ?? new List<string> { "Keine Skills" });
-            html = html.Replace("{{Skills_Content}}", skillsHtml);
+            // 1. Start-Tag definieren
+            var skillsOpening = "<ul style=\"padding-left: 15px; font-size: 9pt; color: #ccc; margin-bottom: 0;\">";
+
+            // 2. Den Inhalt generieren (die <li> Elemente)
+            var skillsItems = profile?.Skills != null && profile.Skills.Any()
+                ? string.Join("", profile.Skills.Select(s => $"<li><span contenteditable=\"true\">{s.Name}</span></li>"))
+                : "<li>Keine Skills</li>";
+
+            // 3. Alles zusammenfügen: Start + Inhalt + Ende
+            var fullSkillsHtml = skillsOpening + skillsItems + "</ul>";
+
+            // 4. Den Platzhalter im Dokument ersetzen
+            html = html.Replace("{{Skills_Content}}", fullSkillsHtml);
+
 
             // Kompetenzen
-            var compHtml = "<ul>" + string.Join("", profile?.Competences?.Select(c => $"<li>{c}</li>") ?? new List<string> { "<li>Keine Kompetenzen</li>" }) + "</ul>";
-            html = html.Replace("{{Competences_Content}}", compHtml);
+            // 1. Start-Tag (Style analog zu den Skills, damit es optisch passt)
+            var compOpening = "<ul style=\"padding-left: 15px; font-size: 9pt; color: #ccc; margin-bottom: 0;\">";
+
+            // 2. Den Inhalt generieren
+            var compItems = (profile?.Competences != null && profile.Competences.Any())
+                ? string.Join("", profile.Competences.Select(c => $"<li contenteditable='true'>{c}</li>"))
+                : "<li contenteditable='true'>Keine Kompetenzen hinterlegt</li>";
+
+            // 3. Alles zusammenbauen
+            var fullCompHtml = compOpening + compItems + "</ul>";
+
+            // 4. Ersetzen
+            html = html.Replace("{{Competences_Content}}", fullCompHtml);
 
             return html;
         }
@@ -259,9 +319,9 @@ namespace JobApplicator2.Services
             using var context = _dbFactory.CreateDbContext();
             return await context.Profiles
                 .Include(p => p.Personal)
-                .Include(p => p.Skills)
-                .Include(p => p.Experiences)
-                .Include(p => p.EducationHistory)
+                .Include(p => p.Skills)             // Wieder rein!
+                .Include(p => p.Experiences)        // Wieder rein!
+                .Include(p => p.EducationHistory)   // Wieder rein!
                 .FirstOrDefaultAsync();
         }
 
@@ -282,14 +342,18 @@ namespace JobApplicator2.Services
             else
             {
                 context.Entry(existing).CurrentValues.SetValues(data);
-                existing.Personal = data.Personal;
-                context.RemoveRange(existing.Skills);
+                if (existing.Personal != null && data.Personal != null)
+                    context.Entry(existing.Personal).CurrentValues.SetValues(data.Personal);
+
+                // Listen-Update: Alt weg, neu her
+                context.Skills.RemoveRange(existing.Skills);
                 existing.Skills = data.Skills;
-                context.RemoveRange(existing.Experiences);
+
+                context.Experiences.RemoveRange(existing.Experiences);
                 existing.Experiences = data.Experiences;
-                context.RemoveRange(existing.EducationHistory);
+
+                context.EducationHistory.RemoveRange(existing.EducationHistory);
                 existing.EducationHistory = data.EducationHistory;
-                existing.Competences = data.Competences;
             }
             await context.SaveChangesAsync();
         }
@@ -340,9 +404,48 @@ namespace JobApplicator2.Services
             try { context.Database.ExecuteSqlRaw("ALTER TABLE Applications ADD COLUMN AppliedAt TEXT;"); } catch { }
             try { context.Database.ExecuteSqlRaw("ALTER TABLE Applications ADD COLUMN StatusChangedAt TEXT;"); } catch { }
             try { context.Database.ExecuteSqlRaw("ALTER TABLE Applications ADD COLUMN JobSummary TEXT;"); } catch { }
+
+           
             // 3. Fix für andere Tabellen
             try { context.Database.ExecuteSqlRaw("ALTER TABLE AiSettings ADD COLUMN GeminiModel TEXT DEFAULT 'gemini-1.5-flash';"); } catch { }
             try { context.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS Templates (Id INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT, HtmlDeckblatt TEXT, HtmlAnschreiben TEXT, HtmlLebenslauf TEXT, CustomCss TEXT);"); } catch { }
+
+
+            try
+            {
+                context.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS Skills (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name TEXT, Level TEXT,
+                ResumeDataId INTEGER,
+                FOREIGN KEY (ResumeDataId) REFERENCES Profiles (Id) ON DELETE CASCADE
+            );");
+            }
+            catch { }
+
+            try
+            {
+                context.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS Experiences (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Company TEXT, Period TEXT, Role TEXT, Description TEXT,
+                ResumeDataId INTEGER,
+                FOREIGN KEY (ResumeDataId) REFERENCES Profiles (Id) ON DELETE CASCADE
+            );");
+            }
+            catch { }
+
+            try
+            {
+                context.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS EducationHistory (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                School TEXT, Period TEXT, Degree TEXT, Notes TEXT,
+                ResumeDataId INTEGER,
+                FOREIGN KEY (ResumeDataId) REFERENCES Profiles (Id) ON DELETE CASCADE
+            );");
+            }
+            catch { }
         }
 
         public string RenderTemplate(string html, ResumeData? profile, ApplicationRecord? app = null)

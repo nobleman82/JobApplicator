@@ -77,10 +77,27 @@
                 <select class="insert-dropdown" @onchange="InsertField" style="background: #333; color: white; border: none; font-size: 0.75rem;">
                     <option value="">+ Feld einfügen</option>
                     <option value="{{Name}}">Name</option>
+                    <option value="{{Titel}}">Titel</option>
+                    <option value="{{Phone}}">Phone</option>
+                    <option value="{{Location}}">Location</option>
+                    <option value="{{Email}}">Email</option>
+                    <option value="{{Website}}">Website</option>
+
                     <option value="{{Photo}}">Foto</option>
                     <option value="{{JobTitle}}">Job</option>
                     <option value="{{Company}}">Firma</option>
+                    <option value="{{Street}}">Firma Street</option>
+                    <option value="{{ZipCode}}">Firma ZipCode</option>
+                    <option value="{{City}}">Firma City</option>
+                    <option value="{{Date}}">Date</option>
+                    <option value="{{Date}}">Date</option>
                     <option value="{{LetterText}}">Anschreiben-Text</option>
+
+                    <option value="{{CV_Experience}}">Berufserfahrung</option>
+                    <option value="{{CV_Education}}">Schulbildung</option>
+                    <option value="{{Skills_Content}}">Skills</option>
+                    <option value="{{Competences_Content}}">Kompetenzen</option>
+
                 </select>
             </div>
             <div class="code-editor-container flex-grow-1">
@@ -107,13 +124,21 @@
 
         @* KI BEREICH *@
         <div class="mt-auto pt-2 border-top">
-            <div class="card border-info bg-light p-2">
+            <div class="card border-info bg-light p-2 shadow-sm">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                    <label class="small fw-bold text-info m-0">KI Import</label>
-                    <button class="btn btn-xs btn-primary py-0" @onclick="CopyPromptToClipboard">📋 Prompt</button>
+                    <label class="small fw-bold text-info m-0">
+                        <i class="bi bi-robot"></i> KI Design Import
+                    </label>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-xs btn-outline-primary py-0" @onclick="CopyPromptToClipboard">📋 Prompt</button>
+                        @* Der wiederhergestellte Import-Button *@
+                        <button class="btn btn-xs btn-primary py-0" @onclick="HandleManualImport">📥 Import</button>
+                    </div>
                 </div>
-                <textarea class="form-control form-control-sm" style="height: 40px; font-size: 0.7rem;"
-                          placeholder="JSON hier einfügen..." @oninput="OnImportJsonInput"></textarea>
+                <textarea class="form-control form-control-sm"
+                          style="height: 45px; font-size: 0.7rem; font-family: monospace;"
+                          placeholder="JSON Design hier einfügen..."
+                          @bind="jsonImportBuffer"></textarea>
             </div>
         </div>
     </div>
@@ -152,6 +177,7 @@
     private List<HtmlTemplate> savedTemplates = new();
     private string activeTab = "letter";
     private DotNetObjectReference<TemplateEditor>? objRef;
+    private string jsonImportBuffer = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -168,7 +194,20 @@
 
         if (AppId > 0) selectedApp = await DbService.GetApplicationAsync(AppId);
     }
+    private async Task HandleManualImport()
+    {
+        if (string.IsNullOrWhiteSpace(jsonImportBuffer)) return;
 
+        // Wir erstellen ein künstliches ChangeEventArgs, um deine bestehende Logik wiederzuverwenden
+        var args = new ChangeEventArgs { Value = jsonImportBuffer };
+        await OnImportJsonInput(args);
+
+        jsonImportBuffer = ""; // Feld nach Erfolg leeren
+        StateHasChanged();
+    }
+
+    // Deine bestehende Logik bleibt gleich, ich habe nur den Error-Alert hinzugefügt
+    
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender) await UpdatePreview();
@@ -311,21 +350,52 @@
         try
         {
             string raw = e.Value?.ToString() ?? "";
+
+            // 1. Bereinigung: Finde den Anfang des echten JSON-Objekts
             int start = raw.IndexOf("{");
-            if (start < 0) return;
-            using var doc = JsonDocument.Parse(raw.Substring(start));
+            int end = raw.LastIndexOf("}");
+            if (start < 0 || end < 0) return;
+
+            string jsonClean = raw.Substring(start, (end - start) + 1);
+
+            using var doc = JsonDocument.Parse(jsonClean);
             var root = doc.RootElement;
 
-            template.CustomCss = root.GetProperty("css").GetString() ?? "";
-            template.HtmlDeckblatt = FormatHtml(root.GetProperty("deckblatt").GetString());
-            template.HtmlAnschreiben = FormatHtml(root.GetProperty("anschreiben").GetString());
-            template.HtmlLebenslauf = FormatHtml(root.GetProperty("lebenslauf").GetString());
+            // 2. CSS extrahieren
+            if (root.TryGetProperty("css", out var cssProp))
+                template.CustomCss = cssProp.GetString() ?? "";
+
+            // 3. HTML-Felder extrahieren (mit Fallback für die "Gemini-Struktur")
+            template.HtmlDeckblatt = FormatHtml(GetJsonValue(root, "deckblatt"));
+            template.HtmlAnschreiben = FormatHtml(GetJsonValue(root, "anschreiben"));
+            template.HtmlLebenslauf = FormatHtml(GetJsonValue(root, "lebenslauf"));
 
             await UpdatePreview();
             StateHasChanged();
+            await JS.InvokeVoidAsync("alert", "Design erfolgreich importiert!");
         }
-        catch { }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", "Fehler beim Import: " + ex.Message);
+        }
     }
+
+    // Hilfsmethode, um den String zu finden, egal ob direkt oder im .html Unterobjekt
+    private string GetJsonValue(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var element)) return "";
+
+        // Wenn das Element ein String ist -> direkt zurückgeben
+        if (element.ValueKind == JsonValueKind.String)
+            return element.GetString() ?? "";
+
+        // Wenn das Element ein Objekt ist -> schaue nach der Eigenschaft "html"
+        if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("html", out var htmlSubProp))
+            return htmlSubProp.GetString() ?? "";
+
+        return "";
+    }
+
 
     private async Task GoToContentEditor()
     {
